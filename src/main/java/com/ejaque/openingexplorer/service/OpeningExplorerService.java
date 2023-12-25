@@ -30,6 +30,52 @@ import com.google.gson.JsonParser;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * The class OpeningExplorerService is designed to interact with an online chess
+ * move database (like Lichess) and analyze chess openings. The class is
+ * equipped to search for the best moves in given board positions and handle
+ * various chess-related functionalities. Provides services for interacting with
+ * an external chess API and analyzing chess moves and positions. This class
+ * serves as a bridge between the application's chess logic and external data
+ * sources like Lichess.
+ * 
+ * <p>
+ * API Interaction:
+ * </p>
+ * <ul>
+ * <li>Interacts with the Lichess API to fetch data about chess moves and
+ * positions.</li>
+ * <li>Constructs an API URL using the current FEN string and sends an HTTP GET
+ * request.</li>
+ * <li>Parses the API response to extract move data for further analysis.</li>
+ * </ul>
+ * 
+ * <p>
+ * Chess Analysis:
+ * </p>
+ * <ul>
+ * <li>Calculates various metrics such as average ratings, game counts, and move
+ * popularity.</li>
+ * <li>Applies conditions to identify good moves, considering factors like game
+ * count thresholds and move popularity percentages.</li>
+ * </ul>
+ * 
+ * <p>
+ * Logging and Exception Handling:
+ * </p>
+ * <ul>
+ * <li>Utilizes log statements to record key actions and decisions throughout
+ * the move analysis process.</li>
+ * <li>Implements exception handling for potential errors during move execution
+ * or API communication.</li>
+ * </ul>
+ * 
+ * <p>
+ * This class demonstrates the integration of chess logic with external API
+ * data, showcasing a combination of chess algorithms, HTTP communication, and
+ * application configuration management.
+ * </p>
+ */
 @Service
 @Slf4j
 public class OpeningExplorerService {
@@ -99,13 +145,18 @@ public class OpeningExplorerService {
     }
     
     /**
-     * 
-     * @param fen FEN for current position
-     * @param color Color to play in this move
-     * @param depth 
-     * @param parentProbability Probability of the opponent reaching this line
-     * @throws Exception
-     */
+	 * Recursively searches for the best moves from the given position, depth, and
+	 * probability. It communicates with the Lichess API, processes the response,
+	 * and applies various criteria to evaluate moves.
+	 * 
+	 * @param fen               FEN for current position
+	 * @param color             Color to play in this move
+	 * @param depth             Remaining depth, for example starts with depth 10
+	 *                          and ends with 0 when no further searching can be
+	 *                          done.
+	 * @param parentProbability Probability of the opponent reaching this line
+	 * @throws Exception
+	 */
     private void searchBestMove(String fen, String color, int depth, double parentProbability) throws Exception {
         
     	log.debug("Remaining DEPTH=" + depth);
@@ -116,7 +167,7 @@ public class OpeningExplorerService {
 
         String encodedFen = URLEncoder.encode(fen, "UTF-8");
         
-        String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=2500&fen=" + encodedFen;
+        String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=2200,2500&fen=" + encodedFen;
 
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         credentialsProvider.setCredentials(
@@ -275,7 +326,14 @@ public class OpeningExplorerService {
 		}
     }
     
-
+    /**
+	 * Generates a new FEN (Forsyth-Edwards Notation) string after a move. It now
+	 * includes a check for castling moves and converts them if necessary.
+	 * 
+	 * @param fen
+	 * @param moveUci
+	 * @return
+	 */
     private String generateNewFen(String fen, String moveUci) {
         Board board = new Board();
         board.loadFromFen(fen);

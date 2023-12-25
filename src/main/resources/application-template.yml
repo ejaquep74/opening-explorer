@@ -1,0 +1,17 @@
+lichess:
+  api:
+    username: ejaque74
+    password: xxxxxx 
+    
+searchParams:
+  playerColor: black
+  startPositionFEN: rnbqk2r/pp3pp1/2pb1n1p/3p4/3P3B/2NBP3/PP3PPP/R2QK1NR b KQkq - 3 8
+  startPositionColor: black
+  maxDepthHalfMoves: 5    
+  maxPopularityPctg: 0.1
+  minRankForRatingAvg: 3
+  minPercentileForRatingAvg: 70.0
+  minProbabilityOfMove: 0.05
+  minGamesToExploreOpponentMove: 10
+  minGamesToChooseGoodMove: 10
+  minGamesToChooseCandidateMove: 10

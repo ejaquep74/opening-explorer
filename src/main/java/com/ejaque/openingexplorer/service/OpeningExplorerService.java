@@ -108,7 +108,7 @@ public class OpeningExplorerService {
      */
     private void searchBestMove(String fen, String color, int depth, double parentProbability) throws Exception {
         
-    	log.debug("Remaing DEPTH=" + depth);
+    	log.debug("Remaining DEPTH=" + depth);
     	if (depth == 0) {
         	log.info("hitting MAX DEPTH... returning");
             return; // Stop recursion at depth 0

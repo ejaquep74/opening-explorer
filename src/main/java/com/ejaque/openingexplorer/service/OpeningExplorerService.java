@@ -1,5 +1,6 @@
 package com.ejaque.openingexplorer.service;
 
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,6 +15,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -79,12 +81,16 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @Slf4j
 public class OpeningExplorerService {
-    public static final String COLOR_WHITE = "white"; 
-    public static final String COLOR_BLACK = "black";
     
+	public static final String COLOR_WHITE = "white"; 
+    public static final String COLOR_BLACK = "black";
+
     /** This avg rating is used as a reference for doing weighted sums, just an optimization.*/
     public static final double AVG_RATING = 2500.0;
 
+    @Autowired
+    private ExcelExportService excelExportService;
+    
     
     List<GoodMove> bestMoves = new ArrayList<>();
     
@@ -122,6 +128,8 @@ public class OpeningExplorerService {
 
     @Value("${searchParams.minPercentileForRatingAvg}")    
     private double minPercentileForRatingAvg;
+    
+    private Integer totalGamesStartingPosition;
     
     
 	/**
@@ -164,7 +172,7 @@ public class OpeningExplorerService {
         	log.info("hitting MAX DEPTH... returning");
             return; // Stop recursion at depth 0
         }
-
+    	
         String encodedFen = URLEncoder.encode(fen, "UTF-8");
         
         String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=2200,2500&fen=" + encodedFen;
@@ -178,7 +186,9 @@ public class OpeningExplorerService {
         HttpClient httpClient = HttpClients.custom()
                 .setDefaultCredentialsProvider(credentialsProvider)
                 .build();
-
+        
+        Thread.sleep(1000);  // wait full second before calling URL to avoid Http Error 429
+        
         log.info("Call URL: " + apiUrl);
         log.info("FEN: " + fen);
         HttpGet httpGet = new HttpGet(apiUrl);
@@ -194,10 +204,16 @@ public class OpeningExplorerService {
             int totalDraws = jsonObject.get("draws").getAsInt();
             int totalGames = totalWhiteWins + totalBlackWins + totalDraws;
 
+        	// if not set, calculate the total games for starting position
+        	if (totalGamesStartingPosition == null && depth == maxDepthHalfMoves) {
+        		totalGamesStartingPosition = totalGames;
+        	}
+
+            
             List<Integer> averageRatings = new ArrayList<>();
             List<Integer> averageRatingRanks = new ArrayList<>();
-            double averageRatingForAllMoves = 0.0;
-            int totalGamesForAllMoves = 0;
+            double avgRatingForAllValidMoves = 0.0;
+            int totalGamesForAllValidMoves = 0;	// total considering only moves "searched"
             
             for (int i = 0; i < movesArray.size(); i++) {
                 JsonObject moveObject = movesArray.get(i).getAsJsonObject();
@@ -211,16 +227,16 @@ public class OpeningExplorerService {
             	
             	if (totalGamesMove >= minGamesToChooseCandidateMove) {
             		averageRatings.add(averageRating);
-            		totalGamesForAllMoves = totalGamesForAllMoves + totalGamesMove;
-            		averageRatingForAllMoves = averageRatingForAllMoves + (double) averageRating * totalGamesMove / AVG_RATING;
+            		totalGamesForAllValidMoves = totalGamesForAllValidMoves + totalGamesMove;
+            		avgRatingForAllValidMoves = avgRatingForAllValidMoves + (double) averageRating * totalGamesMove / AVG_RATING;
             	}
             }
             
             // we multiply for AVG_RATING to cancel out the division we did before (this is only for avoiding numeric overflows).
-            averageRatingForAllMoves = averageRatingForAllMoves * AVG_RATING / totalGamesForAllMoves;
+            avgRatingForAllValidMoves = avgRatingForAllValidMoves * AVG_RATING / totalGamesForAllValidMoves;
             
             
-            log.info("averageRatingForAllMoves=" + averageRatingForAllMoves);
+            log.info("averageRatingForAllMoves=" + avgRatingForAllValidMoves);
             
             averageRatingRanks = rankAverageRatings(averageRatings);
             
@@ -229,6 +245,8 @@ public class OpeningExplorerService {
                 String move = moveObject.get("uci").getAsString();
                 
                 log.debug("checking move: " + move);
+                log.debug("total games (prev move): " + totalGames);
+                
                 
                 int whiteWins = moveObject.get("white").getAsInt();
                 int blackWins = moveObject.get("black").getAsInt();
@@ -242,6 +260,9 @@ public class OpeningExplorerService {
             	}
                 
                 double popularityPctg = (double) totalGamesMove / totalGames;
+                
+                // calculate the Probability of reaching this position
+                double rawProbability = (double) totalGames / totalGamesStartingPosition;
                 
                 double accumulatedProbability = 1.0;
                 // if we are checking the opponent move, recalculate the Probability of this move
@@ -259,36 +280,42 @@ public class OpeningExplorerService {
                     // Check if it's one of the top-3 moves in terms of rating average
                 	// and that it has a "minimum of games" played
                     if (ratingPercentile  >= minPercentileForRatingAvg && totalGamesMove >= minGamesToChooseGoodMove) {
-                    	log.debug("good move: " + move);
+                    	log.debug("*** GOOD MOVE: " + move);
                     	log.debug("popularity pctg: " + popularityPctg);                    	
                     	log.debug("avg rating rank: " + averageRatingRanks.get(i));
                         bestMoves.add(
                         		GoodMove.builder()
                         		.move(move)
                         		.averageRating(averageRatings.get(i))
-                        		.averageRatingForAllMoves(averageRatingForAllMoves)
+                        		.averageRatingForAllMoves(avgRatingForAllValidMoves)
                         		.ratingRank(averageRatingRanks.get(i))
                         		.ratingPercentile(ratingPercentile)
                         		.fen(fen)
                         		.probabilityOcurring(parentProbability)
+                        		.rawProbability(rawProbability)
                         		.build()
                         		);
                     }
 
                 }
 
+                log.debug("accumulatedProbability: " + accumulatedProbability);
+
                 // if Probability of move is enough and we have "enough games", continue searching recursively
                 if (accumulatedProbability >= minProbabilityOfMove && totalGamesMove >= minGamesToExploreOpponentMove) {
                     String newFen = generateNewFen(fen, move);
                     String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
                     log.debug("try move: " + move);
-                    log.debug("accumulatedProbability: " + accumulatedProbability);
                     searchBestMove(newFen, opponentColor, depth - 1, accumulatedProbability);
                     log.debug("back to FEN: "+ fen);
                 }
 
             
             } // end FOR candidate moves
+        
+        } else {
+        	log.error("ERROR IN RESPONSE...");
+        	log.error("response: " + response);
         }
     }
     
@@ -318,12 +345,20 @@ public class OpeningExplorerService {
         return averageRatingRanks;
     }    
 
-    public void printBestMoves() {
+	/**
+	 * Exports the good moves found to an excel file.
+	 * 
+	 * @throws IOException If there's some problem generating excel file.
+	 */
+	public void exportGoodMoves() throws IOException {
         System.out.println("Best Moves:");
         
         for (GoodMove goodMove : bestMoves) {
         	System.out.println("MOVE: " + goodMove);
 		}
+
+        log.info("EXPORTING all good moves to EXCEL file.");
+        excelExportService.generateExcel(bestMoves);        
     }
     
     /**

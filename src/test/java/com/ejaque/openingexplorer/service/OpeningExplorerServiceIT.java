@@ -21,6 +21,6 @@ public class OpeningExplorerServiceIT {
     @Test
     public void testSearchBestMoveIntegration() throws Exception {
         openingExplorer.startSearch();
-        openingExplorer.printBestMoves();        
+        openingExplorer.exportGoodMoves();        
     }
 }

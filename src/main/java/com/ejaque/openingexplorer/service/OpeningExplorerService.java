@@ -87,6 +87,14 @@ public class OpeningExplorerService {
 
     /** This avg rating is used as a reference for doing weighted sums, just an optimization.*/
     public static final double AVG_RATING = 2500.0;
+    
+	/**
+	 * Time in millis to wait between calls to Lichess API. Configure this to avoid
+	 * getting Http Error 429 from Lichess API. Have seen issues when calling more
+	 * often than one transaction per second.
+	 */
+    @Value("${throttling.minTimeBetweenCalls}")
+	private long minTimeBetweenCalls = 1200;
 
     @Autowired
     private ExcelExportService excelExportService;
@@ -94,6 +102,7 @@ public class OpeningExplorerService {
     
     List<GoodMove> bestMoves = new ArrayList<>();
     
+    long lastTimeCalledLichess = System.currentTimeMillis();
     
     @Value("${lichess.api.username}")
     private String username;
@@ -187,7 +196,13 @@ public class OpeningExplorerService {
                 .setDefaultCredentialsProvider(credentialsProvider)
                 .build();
         
-        Thread.sleep(1000);  // wait full second before calling URL to avoid Http Error 429
+        // HANDLE THROTTLING OF CALLS TO LICHESS  (DONT GET BANNED!!!)
+        long elapsedTime = System.currentTimeMillis() - lastTimeCalledLichess;
+        if (elapsedTime < minTimeBetweenCalls) {
+        	long remainingTime = minTimeBetweenCalls - elapsedTime;
+        	Thread.sleep(remainingTime);  						// wait some time to total a full second since last calling URL, to avoid Http Error 429
+        	lastTimeCalledLichess = System.currentTimeMillis(); // i am just about to call so I record the time here 
+        }
         
         log.info("Call URL: " + apiUrl);
         log.info("FEN: " + fen);
@@ -277,7 +292,7 @@ public class OpeningExplorerService {
                 	
                 	double ratingPercentile = (1 - ((double) (averageRatingRanks.get(i) - 1) / averageRatingRanks.size())) * 100.0;
                 	
-                    // Check if it's one of the top-3 moves in terms of rating average
+                    // Check if it's one of the top moves in terms of rating average
                 	// and that it has a "minimum of games" played
                     if (ratingPercentile  >= minPercentileForRatingAvg && totalGamesMove >= minGamesToChooseGoodMove) {
                     	log.debug("*** GOOD MOVE: " + move);

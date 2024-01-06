@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.ejaque.openingexplorer.model.GoodMove;
+import com.ejaque.openingexplorer.util.EloUtil;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Piece;
 import com.github.bhlangonijr.chesslib.Side;
@@ -118,7 +119,6 @@ public class OpeningExplorerService {
 
     @Value("${searchParams.startPositionColor}")
 	private String startPositionColor;
-
     
     @Value("${searchParams.maxPopularityPctg}")
 	private double maxPopularityPctg;
@@ -158,7 +158,7 @@ public class OpeningExplorerService {
 
     /** Starts the search for good moves. */
     public void startSearch() throws Exception {
-    	searchBestMove(startPositionFEN, startPositionColor, maxDepthHalfMoves, 1.0);
+    	searchBestMove(startPositionFEN, startPositionColor, maxDepthHalfMoves, 1.0, false);
     }
     
     /**
@@ -168,18 +168,25 @@ public class OpeningExplorerService {
 	 * 
 	 * @param fen               FEN for current position
 	 * @param color             Color to play in this move
-	 * @param depth             Remaining depth, for example starts with depth 10
+	 * @param remainingDepth             Remaining depth, for example starts with depth 10
 	 *                          and ends with 0 when no further searching can be
 	 *                          done.
 	 * @param parentProbability Probability of the opponent reaching this line
+	 * @param isExtraDepthCall  Set to TRUE only when you are already at remaining
+	 *                          depth 1 but you want the extra call just to get the
+	 *                          avg rating returned by this method.
+	 * @return Avg rating for all valid moves in this position
 	 * @throws Exception
 	 */
-    private void searchBestMove(String fen, String color, int depth, double parentProbability) throws Exception {
-        
-    	log.debug("Remaining DEPTH=" + depth);
-    	if (depth == 0) {
+    private double searchBestMove(String fen, String color, int remainingDepth, double parentProbability, boolean isExtraDepthCall) throws Exception {
+
+    	double avgRatingForAllValidMoves = 0.0;  	// all "valid" moves that have a minimum games played
+    	double avgRatingForAllMoves = 0.0;			// all "moves", for doing stats		
+    	
+    	log.debug("Remaining DEPTH=" + remainingDepth);
+    	if (remainingDepth == 0 && !isExtraDepthCall) {
         	log.info("hitting MAX DEPTH... returning");
-            return; // Stop recursion at depth 0
+            return avgRatingForAllValidMoves; // Stop recursion at depth 0
         }
     	
         String encodedFen = URLEncoder.encode(fen, "UTF-8");
@@ -220,15 +227,15 @@ public class OpeningExplorerService {
             int totalGames = totalWhiteWins + totalBlackWins + totalDraws;
 
         	// if not set, calculate the total games for starting position
-        	if (totalGamesStartingPosition == null && depth == maxDepthHalfMoves) {
+        	if (totalGamesStartingPosition == null && remainingDepth == maxDepthHalfMoves) {
         		totalGamesStartingPosition = totalGames;
         	}
 
             
             List<Integer> averageRatings = new ArrayList<>();
             List<Integer> averageRatingRanks = new ArrayList<>();
-            double avgRatingForAllValidMoves = 0.0;
             int totalGamesForAllValidMoves = 0;	// total considering only moves "searched"
+            int totalGamesForAllMoves = 0;
             
             for (int i = 0; i < movesArray.size(); i++) {
                 JsonObject moveObject = movesArray.get(i).getAsJsonObject();
@@ -240,22 +247,32 @@ public class OpeningExplorerService {
                 
                 int totalGamesMove = whiteWins + blackWins + draws;
             	
+                // we calculate the avgRatingForAllValidMoves by doing a weighted avg of the avg rating for all moves
             	if (totalGamesMove >= minGamesToChooseCandidateMove) {
             		averageRatings.add(averageRating);
             		totalGamesForAllValidMoves = totalGamesForAllValidMoves + totalGamesMove;
             		avgRatingForAllValidMoves = avgRatingForAllValidMoves + (double) averageRating * totalGamesMove / AVG_RATING;
             	}
+
+            	totalGamesForAllMoves = totalGamesForAllMoves + totalGamesMove;
+            	avgRatingForAllMoves = avgRatingForAllValidMoves + (double) averageRating * totalGamesMove / AVG_RATING;
             }
             
             // we multiply for AVG_RATING to cancel out the division we did before (this is only for avoiding numeric overflows).
-            avgRatingForAllValidMoves = avgRatingForAllValidMoves * AVG_RATING / totalGamesForAllValidMoves;
+            avgRatingForAllValidMoves = (double) avgRatingForAllValidMoves * AVG_RATING / totalGamesForAllValidMoves;
+            avgRatingForAllMoves = (double) avgRatingForAllMoves * AVG_RATING / totalGamesForAllMoves;
             
-            
-            log.info("averageRatingForAllMoves=" + avgRatingForAllValidMoves);
+            log.info("avgRatingForAllValidMoves=" + avgRatingForAllValidMoves);
+            log.info("avgRatingForAllMoves=" + avgRatingForAllMoves);
             
             averageRatingRanks = rankAverageRatings(averageRatings);
             
             for (int i = 0; i < movesArray.size(); i++) {
+            	
+            	boolean isGoodMove = false;
+            	double ratingPercentile = 0.0;
+            	double averageRatingOpponents = 0.0;
+            	
                 JsonObject moveObject = movesArray.get(i).getAsJsonObject();
                 String move = moveObject.get("uci").getAsString();
                 
@@ -268,6 +285,8 @@ public class OpeningExplorerService {
                 int draws = moveObject.get("draws").getAsInt();
                 
                 int totalGamesMove = whiteWins + blackWins + draws;
+                
+                double whitePointsPctg = (double) (whiteWins * 1 + draws * 0.5) / totalGamesMove; 
 
                 // if total games are very few, we stop iterating (moves are ordered descending on total games played)
             	if (totalGamesMove < minGamesToChooseCandidateMove) {
@@ -290,26 +309,15 @@ public class OpeningExplorerService {
                 // Check if it's played rarely from PLAYER's side
                 if (color.equals(playerColor) && popularityPctg <= maxPopularityPctg) {
                 	
-                	double ratingPercentile = (1 - ((double) (averageRatingRanks.get(i) - 1) / averageRatingRanks.size())) * 100.0;
+                	ratingPercentile = (1 - ((double) (averageRatingRanks.get(i) - 1) / averageRatingRanks.size())) * 100.0;
                 	
                     // Check if it's one of the top moves in terms of rating average
                 	// and that it has a "minimum of games" played
                     if (ratingPercentile  >= minPercentileForRatingAvg && totalGamesMove >= minGamesToChooseGoodMove) {
+                    	isGoodMove = true;
                     	log.debug("*** GOOD MOVE: " + move);
                     	log.debug("popularity pctg: " + popularityPctg);                    	
                     	log.debug("avg rating rank: " + averageRatingRanks.get(i));
-                        bestMoves.add(
-                        		GoodMove.builder()
-                        		.move(move)
-                        		.averageRating(averageRatings.get(i))
-                        		.averageRatingForAllMoves(avgRatingForAllValidMoves)
-                        		.ratingRank(averageRatingRanks.get(i))
-                        		.ratingPercentile(ratingPercentile)
-                        		.fen(fen)
-                        		.probabilityOcurring(parentProbability)
-                        		.rawProbability(rawProbability)
-                        		.build()
-                        		);
                     }
 
                 }
@@ -321,8 +329,44 @@ public class OpeningExplorerService {
                     String newFen = generateNewFen(fen, move);
                     String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
                     log.debug("try move: " + move);
-                    searchBestMove(newFen, opponentColor, depth - 1, accumulatedProbability);
+                    if (!isExtraDepthCall) {
+                    	// we mark this as an "extra depth call" only if we are in remaining depth=1 
+                    	// and we are doing and we are looking at a "good move"
+                    	averageRatingOpponents = searchBestMove(newFen, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
+                    } else {
+                    	log.debug("not doing call to search more moves, we are just getting the avgRatingForAllValidMoves (extra call)");
+                    }
                     log.debug("back to FEN: "+ fen);
+                
+                // if we dont comply with criteria to search deeper but we HAVE to do 
+                // an "extra depth call" (for Good Move stats)...
+                } else if (isGoodMove) {
+                    String newFen = generateNewFen(fen, move);
+                    String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
+                    log.debug("try move (to get stats): " + move);
+                	averageRatingOpponents = searchBestMove(newFen, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
+                	log.debug("back to FEN (got stats): "+ fen);
+                }
+                
+                // if we are iterating in a "good move", we save it to memory
+                if (isGoodMove) {
+                    bestMoves.add(
+                    		GoodMove.builder()
+                    		.move(move)
+                    		.totalGames(totalGames)
+                    		.whitePointsPctg(whitePointsPctg)
+                    		.averageRating(averageRatings.get(i))
+                    		.averageRatingForAllMoves(avgRatingForAllMoves)
+                    		.averageRatingOpponents(averageRatingOpponents)
+                    		.ratingRank(averageRatingRanks.get(i))
+                    		.ratingPercentile(ratingPercentile)
+                    		.fen(fen)
+                    		.probabilityOcurring(parentProbability)
+                    		.rawProbability(rawProbability)
+                    		.whitePointsPctg(whitePointsPctg)
+                    		.performance(EloUtil.getPerformance(avgRatingForAllMoves, whitePointsPctg))
+                    		.build()
+                    		);
                 }
 
             
@@ -332,6 +376,8 @@ public class OpeningExplorerService {
         	log.error("ERROR IN RESPONSE...");
         	log.error("response: " + response);
         }
+        
+        return avgRatingForAllMoves;
     }
     
     

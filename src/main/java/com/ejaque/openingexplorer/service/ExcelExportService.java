@@ -40,8 +40,11 @@ public class ExcelExportService {
         headerRow.createCell(2).setCellValue("Probability Occurring");
         headerRow.createCell(3).setCellValue("Rating Rank");
         headerRow.createCell(4).setCellValue("Rating Percentile");
-        headerRow.createCell(5).setCellValue("Average Rating");
-        headerRow.createCell(6).setCellValue("Average Rating For All Moves");
+        headerRow.createCell(5).setCellValue("Average Rating For All Moves");
+        headerRow.createCell(6).setCellValue("Average Rating");
+        headerRow.createCell(7).setCellValue("Average Rating Opponents");
+        headerRow.createCell(8).setCellValue("White Points Pct");
+        headerRow.createCell(9).setCellValue("Performance");
     }
 
     private void writeGoodMove(GoodMove move, Row row) {
@@ -61,9 +64,19 @@ public class ExcelExportService {
         cell.setCellValue(move.getRatingPercentile());
 
         cell = row.createCell(5);
-        cell.setCellValue(move.getAverageRating());
-
-        cell = row.createCell(6);
         cell.setCellValue(move.getAverageRatingForAllMoves());
+        
+        cell = row.createCell(6);
+        cell.setCellValue(move.getAverageRating());
+        
+        cell = row.createCell(7);
+        cell.setCellValue(move.getAverageRatingOpponents());
+
+        cell = row.createCell(8);
+        cell.setCellValue(move.getWhitePointsPctg());
+
+        cell = row.createCell(9);
+        cell.setCellValue(move.getPerformance());
+
     }
 }

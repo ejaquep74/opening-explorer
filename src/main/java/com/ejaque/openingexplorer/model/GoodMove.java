@@ -55,6 +55,10 @@ public class GoodMove {
 	private double rawProbability;	
 	private int ratingRank;
 	private double ratingPercentile;
+	private double performance;
 	private double averageRating;
 	private double averageRatingForAllMoves;
+	private double averageRatingOpponents;
+	private double totalGames;
+	private double whitePointsPctg;
 }

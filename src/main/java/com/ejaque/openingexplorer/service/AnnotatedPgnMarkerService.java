@@ -1,8 +1,9 @@
 package com.ejaque.openingexplorer.service;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -21,12 +22,93 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AnnotatedPgnMarkerService {
 
+    /**
+     * Saves the annotated PGN to a file.
+     *
+     * @param inputPgnFilePath  The path to the input PGN file.
+     * @param outputPgnFilePath The path to the output PGN file where annotated PGN will be saved.
+     * @throws Exception If an error occurs during processing or writing to the file.
+     */
+    public void saveAnnotatedPgnToFile(String inputPgnFilePath, String outputPgnFilePath) throws Exception {
+        String annotatedPgn = markImportantMovesInPgn(inputPgnFilePath);
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPgnFilePath))) {
+            writer.write(annotatedPgn);
+        } catch (IOException e) {
+            log.error("Error writing the annotated PGN to file: " + outputPgnFilePath, e);
+            throw e;
+        }
+    }
+    
+    
     public String markImportantMovesInPgn(String pgnFilePath) throws Exception {
         PgnHolder pgn = new PgnHolder(pgnFilePath);
         pgn.loadPgn();
 
         StringBuilder annotatedPgn = new StringBuilder();
         for (Game game : pgn.getGames()) {
+
+        	// Append game headers only if they and their sub-properties are not null
+        	if (game.getRound() != null && game.getRound().getEvent() != null) {
+        	    if (game.getRound().getEvent().getName() != null) {
+        	        annotatedPgn.append("[Event \"").append(game.getRound().getEvent().getName()).append("\"]\n");
+        	    }
+        	    if (game.getRound().getEvent().getStartDate() != null) {
+        	        annotatedPgn.append("[EventDate \"").append(game.getRound().getEvent().getStartDate()).append("\"]\n");
+        	    }
+        	    if (game.getRound().getEvent().getEventType() != null) {
+        	        annotatedPgn.append("[EventType \"").append(game.getRound().getEvent().getEventType()).append("\"]\n");
+        	    }
+        	    if (game.getRound().getEvent().getSite() != null) {
+        	        annotatedPgn.append("[Site \"").append(game.getRound().getEvent().getSite()).append("\"]\n");
+        	    }
+        	}
+
+        	if (game.getDate() != null) {
+        	    annotatedPgn.append("[Date \"").append(game.getDate()).append("\"]\n");
+        	}
+
+        	if (game.getRound() != null && game.getRound().getNumber() > 0) {
+        	    annotatedPgn.append("[Round \"").append(game.getRound().getNumber()).append("\"]\n");
+        	}
+
+        	if (game.getWhitePlayer() != null) {
+        	    annotatedPgn.append("[White \"").append(game.getWhitePlayer()).append("\"]\n");
+        	    if (game.getWhitePlayer().getElo() > 0) {
+        	        annotatedPgn.append("[WhiteElo \"").append(game.getWhitePlayer().getElo()).append("\"]\n");
+        	    }
+        	}
+
+        	if (game.getBlackPlayer() != null) {
+        	    annotatedPgn.append("[Black \"").append(game.getBlackPlayer()).append("\"]\n");
+        	    if (game.getBlackPlayer().getElo() > 0) {
+        	        annotatedPgn.append("[BlackElo \"").append(game.getBlackPlayer().getElo()).append("\"]\n");
+        	    }
+        	}
+
+        	if (game.getResult() != null && game.getResult().getDescription() != null) {
+        	    annotatedPgn.append("[Result \"").append(game.getResult().getDescription()).append("\"]\n");
+        	}
+
+        	if (game.getAnnotator() != null) {
+        	    annotatedPgn.append("[Annotator \"").append(game.getAnnotator()).append("\"]\n");
+        	}
+
+        	if (game.getPlyCount() != null) {
+        	    annotatedPgn.append("[PlyCount \"").append(game.getPlyCount()).append("\"]\n");
+        	}
+
+        	if (game.getEco() != null) {
+        	    annotatedPgn.append("[ECO \"").append(game.getEco()).append("\"]\n");
+        	}
+
+        	if (game.getOpening() != null) {
+        	    annotatedPgn.append("[Opening \"").append(game.getOpening()).append("\"]\n");
+        	}
+
+        	annotatedPgn.append("\n");
+
+
             Board board = new Board();
             MoveList moveList = game.getHalfMoves();
             String[] moves = moveList.toString().split("\\s+");

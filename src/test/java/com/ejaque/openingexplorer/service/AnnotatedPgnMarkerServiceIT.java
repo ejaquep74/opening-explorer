@@ -18,8 +18,9 @@ public class AnnotatedPgnMarkerServiceIT {
     @Test
     public void testSearchBestMoveIntegration() throws Exception {
         try {
-            String annotatedPgn = annotatedPgnMarkerService.markImportantMovesInPgn("C:/Users/eajaquep/Documents/tal-korchnoi.pgn");
-            System.out.println(annotatedPgn);
+            annotatedPgnMarkerService.saveAnnotatedPgnToFile(
+            		"C:/Users/eajaquep/Documents/chesscom-gotd.pgn", 
+            		"C:/Users/eajaquep/Documents/chesscom-gotd-MARKED.pgn");
         } catch (IOException e) {
             e.printStackTrace();
         }

@@ -16,7 +16,7 @@ PEND: connect to chessbase "api" (does not exist but could be scraped) to get in
 
 PEND: Rating Performance: calculate the opponent's rating avg of a move by exploring one move deeper and taking weighted avg of all avg rating for each reply. With this rtg avg for each color, and the info on W/D/L you can calculate the rating performance.
 
-PEND: Use a PGN with player repertoire for chosing which moves to explore from his side.
+PEND: Use a PGN with player repertoire for choosing which moves to explore from his side.
 
 PEND: Use a postgres database to save all moves stats and evaluations. Consider also NoSQL, it may be more suited for this.
 

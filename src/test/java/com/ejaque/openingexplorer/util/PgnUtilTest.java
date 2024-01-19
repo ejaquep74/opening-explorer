@@ -7,6 +7,20 @@ import org.junit.jupiter.api.Test;
 public class PgnUtilTest {
 
     @Test
+    public void testProcessEmptyLine() {
+        String input = "";
+        String expected = "";
+        assertEquals(expected, PgnUtil.processLine(input));
+    }
+
+    @Test
+    public void testProcessSimpleLine() {
+        String input = "xxxx";
+        String expected = "xxxx";
+        assertEquals(expected, PgnUtil.processLine(input));
+    }
+
+    @Test
     public void testProcessLineWithNestedParentheses() {
         String input = "bla bla (xxx z0 (jlsjd) jdsk)";
         String expected = "bla bla ";

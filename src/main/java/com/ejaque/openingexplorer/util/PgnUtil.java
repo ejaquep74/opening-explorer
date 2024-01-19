@@ -124,13 +124,35 @@ public class PgnUtil {
              BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath))) {
 
             String line;
+            
+            // to mark that the PGN has some special starting position, we want to IGNORE those
+            boolean pgnHasFenPosition = false;
+            
             while ((line = reader.readLine()) != null) {
                 // Skip lines that start with "["
-                if (!line.startsWith("[")) {
-                    line = processLine(line);
+                if (line.startsWith("1")) {  // line with game moves
+                    if (!pgnHasFenPosition) {
+	                	line = processLine(line);
+	                	writer.newLine();
+	                    writer.write(line);
+	                    writer.newLine();
+	                    writer.newLine();
+
+                    // if we have an special starting position, we IGNORE the game completly
+                    } else {
+                    	writer.write("");
+                    	writer.newLine();
+	                    pgnHasFenPosition = false;  // we reset the flag, until next game has FEN header
+
+                    }
+                } else if (line.startsWith("[FEN ")) {
+                	pgnHasFenPosition = true;
+                    writer.write(line);
+                    writer.newLine();
+                } else if (line.startsWith("[")) {
+                    writer.write(line);
+                    writer.newLine();
                 }
-                writer.write(line);
-                writer.newLine();
             }
         } catch (IOException e) {
             e.printStackTrace();

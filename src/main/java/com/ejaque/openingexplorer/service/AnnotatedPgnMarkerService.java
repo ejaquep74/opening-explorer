@@ -9,12 +9,12 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
+import com.ejaque.openingexplorer.customlibs.chesslib.CustomPgnHolder;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.game.Game;
 import com.github.bhlangonijr.chesslib.move.Move;
 import com.github.bhlangonijr.chesslib.move.MoveConversionException;
 import com.github.bhlangonijr.chesslib.move.MoveList;
-import com.github.bhlangonijr.chesslib.pgn.PgnHolder;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,8 +43,14 @@ public class AnnotatedPgnMarkerService {
     
     
     public String markImportantMovesInPgn(String pgnFilePath) throws Exception {
-        PgnHolder pgn = new PgnHolder(pgnFilePath);
-        pgn.loadPgn();
+        CustomPgnHolder pgn = new CustomPgnHolder(pgnFilePath);
+        
+        try {
+        	pgn.loadPgn();
+        } catch (Exception e) {
+        	log.error("ERROR LOADING PGN", e);
+        	throw e;
+        }
 
         StringBuilder fullOutputPgn = new StringBuilder();
         

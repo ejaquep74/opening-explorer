@@ -34,7 +34,7 @@ public class PgnUtil {
         boolean z0Found = false;
         char currentChar = '\0';
         char prevChar = '\0';
-        boolean braceletOpened = false;
+        boolean bracesOpened = false;
         boolean parenthesesOpened = false;
         	
         for (int i = 0; i < line.length(); i++) {
@@ -42,14 +42,14 @@ public class PgnUtil {
             
             // we check if we are opening a bracket (these are pgn comments that can be just added to output without any checks
             if (currentChar == '{') {
-            	braceletOpened = true;
+            	bracesOpened = true;
             } else if (currentChar == '}') {
-            	braceletOpened = false;
+            	bracesOpened = false;
             }
             
             // if we keep inside brackets (a pgn comment), keep adding to output without any checks
             // we also check we are in depth above the Z0 depth, because if we are Z0 depth, we do want to process anything)
-            if (braceletOpened) {
+            if (bracesOpened) {
             	
             	if (depth < z0Depth) {
 	            	result.append(currentChar);
@@ -62,11 +62,11 @@ public class PgnUtil {
             }
             
 
-            if (currentChar == '(' && !braceletOpened) {
+            if (currentChar == '(' && !bracesOpened) {
             	parenthesesOpened = true;
             	if (depth == 0) start = i;
                 depth++;
-            } else if (prevChar == ')' && !braceletOpened) {
+            } else if (prevChar == ')' && !bracesOpened) {
             	parenthesesOpened = false;
             	depth--;
                 if (depth == 0) {
@@ -128,9 +128,20 @@ public class PgnUtil {
             // to mark that the PGN has some special starting position, we want to IGNORE those
             boolean pgnHasFenPosition = false;
             
+            boolean hasEventHeader = false;
+            
             while ((line = reader.readLine()) != null) {
                 // Skip lines that start with "["
                 if (line.startsWith("1")) {  // line with game moves
+                	
+                	// handle special case when we have no EVENT header
+                	if (!hasEventHeader) {
+                		writer.write("[Event \"DEFAULT_EVENT_NAME\"]");
+                		writer.newLine();
+                	}
+                	
+                	hasEventHeader = false;  // reset this flag as we are ready to process next game
+                	
                     if (!pgnHasFenPosition) {
 	                	line = processLine(line);
 	                	writer.newLine();
@@ -143,10 +154,13 @@ public class PgnUtil {
                     	writer.write("");
                     	writer.newLine();
 	                    pgnHasFenPosition = false;  // we reset the flag, until next game has FEN header
-
                     }
                 } else if (line.startsWith("[FEN ")) {
                 	pgnHasFenPosition = true;
+                    writer.write(line);
+                    writer.newLine();
+                } else if (line.startsWith("[Event ")) {
+                	hasEventHeader = true;
                     writer.write(line);
                     writer.newLine();
                 } else if (line.startsWith("[")) {

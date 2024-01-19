@@ -1,3 +1,7 @@
+PgnUtil:  has method processFile to clear all Z0 (null) moves
+
+
+
 OK vs PEND stuff:
 
 OK: change the output, so it will be an XSLX file with the list of moves and stats

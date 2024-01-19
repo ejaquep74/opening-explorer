@@ -34,6 +34,7 @@ public class AnnotatedPgnMarkerService {
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPgnFilePath))) {
             writer.write(annotatedPgn);
+            log.info("PROCESS COMPLETE. See file: " + outputPgnFilePath);
         } catch (IOException e) {
             log.error("Error writing the annotated PGN to file: " + outputPgnFilePath, e);
             throw e;
@@ -45,78 +46,75 @@ public class AnnotatedPgnMarkerService {
         PgnHolder pgn = new PgnHolder(pgnFilePath);
         pgn.loadPgn();
 
-        StringBuilder annotatedPgn = new StringBuilder();
+        StringBuilder fullOutputPgn = new StringBuilder();
+        
         for (Game game : pgn.getGames()) {
+
+            StringBuilder headerPgn = new StringBuilder();		// game header (PGN)
+            StringBuilder annotatedBodyPgn = new StringBuilder();   // game body (PGN)
 
         	// Append game headers only if they and their sub-properties are not null
         	if (game.getRound() != null && game.getRound().getEvent() != null) {
         	    if (game.getRound().getEvent().getName() != null) {
-        	        annotatedPgn.append("[Event \"").append(game.getRound().getEvent().getName()).append("\"]\n");
+        	        headerPgn.append("[Event \"").append(game.getRound().getEvent().getName()).append("\"]\n");
         	    }
         	    if (game.getRound().getEvent().getStartDate() != null) {
-        	        annotatedPgn.append("[EventDate \"").append(game.getRound().getEvent().getStartDate()).append("\"]\n");
+        	        headerPgn.append("[EventDate \"").append(game.getRound().getEvent().getStartDate()).append("\"]\n");
         	    }
         	    if (game.getRound().getEvent().getEventType() != null) {
-        	        annotatedPgn.append("[EventType \"").append(game.getRound().getEvent().getEventType()).append("\"]\n");
+        	        headerPgn.append("[EventType \"").append(game.getRound().getEvent().getEventType()).append("\"]\n");
         	    }
         	    if (game.getRound().getEvent().getSite() != null) {
-        	        annotatedPgn.append("[Site \"").append(game.getRound().getEvent().getSite()).append("\"]\n");
+        	        headerPgn.append("[Site \"").append(game.getRound().getEvent().getSite()).append("\"]\n");
         	    }
         	}
 
         	if (game.getDate() != null) {
-        	    annotatedPgn.append("[Date \"").append(game.getDate()).append("\"]\n");
-        	}
-
-        	if (game.getRound() != null && game.getRound().getNumber() > 0) {
-        	    annotatedPgn.append("[Round \"").append(game.getRound().getNumber()).append("\"]\n");
+        	    headerPgn.append("[Date \"").append(game.getDate()).append("\"]\n");
         	}
 
         	if (game.getWhitePlayer() != null) {
-        	    annotatedPgn.append("[White \"").append(game.getWhitePlayer()).append("\"]\n");
+        	    headerPgn.append("[White \"").append(game.getWhitePlayer()).append("\"]\n");
         	    if (game.getWhitePlayer().getElo() > 0) {
-        	        annotatedPgn.append("[WhiteElo \"").append(game.getWhitePlayer().getElo()).append("\"]\n");
+        	        headerPgn.append("[WhiteElo \"").append(game.getWhitePlayer().getElo()).append("\"]\n");
         	    }
         	}
 
         	if (game.getBlackPlayer() != null) {
-        	    annotatedPgn.append("[Black \"").append(game.getBlackPlayer()).append("\"]\n");
+        	    headerPgn.append("[Black \"").append(game.getBlackPlayer()).append("\"]\n");
         	    if (game.getBlackPlayer().getElo() > 0) {
-        	        annotatedPgn.append("[BlackElo \"").append(game.getBlackPlayer().getElo()).append("\"]\n");
+        	        headerPgn.append("[BlackElo \"").append(game.getBlackPlayer().getElo()).append("\"]\n");
         	    }
         	}
 
         	if (game.getResult() != null && game.getResult().getDescription() != null) {
-        	    annotatedPgn.append("[Result \"").append(game.getResult().getDescription()).append("\"]\n");
+        	    headerPgn.append("[Result \"").append(game.getResult().getDescription()).append("\"]\n");
         	}
 
         	if (game.getAnnotator() != null) {
-        	    annotatedPgn.append("[Annotator \"").append(game.getAnnotator()).append("\"]\n");
+        	    headerPgn.append("[Annotator \"").append(game.getAnnotator()).append("\"]\n");
         	}
 
         	if (game.getPlyCount() != null) {
-        	    annotatedPgn.append("[PlyCount \"").append(game.getPlyCount()).append("\"]\n");
+        	    headerPgn.append("[PlyCount \"").append(game.getPlyCount()).append("\"]\n");
         	}
 
         	if (game.getEco() != null) {
-        	    annotatedPgn.append("[ECO \"").append(game.getEco()).append("\"]\n");
+        	    headerPgn.append("[ECO \"").append(game.getEco()).append("\"]\n");
         	}
 
         	if (game.getOpening() != null) {
-        	    annotatedPgn.append("[Opening \"").append(game.getOpening()).append("\"]\n");
+        	    headerPgn.append("[Opening \"").append(game.getOpening()).append("\"]\n");
         	}
-
-        	annotatedPgn.append("\n");
-
 
             Board board = new Board();
             MoveList moveList = game.getHalfMoves();
             String[] moves = moveList.toString().split("\\s+");
             Map<Integer, Map<Integer, MoveList>> gameToVariationsMap = getGameToVariationsMap(game);
-//            boolean nextMoveIsImportant = false;
 
         	int moveCounter = 0;
         	int moveIndex = 0;
+        	
             for (String moveStr : moves) {
 
             	moveCounter++;
@@ -126,7 +124,7 @@ public class AnnotatedPgnMarkerService {
             	
             	// add the move number
             	if ((moveCounter - 1) % 2 == 0) {
-            		annotatedPgn.append((moveCounter - 1) / 2 + 1 + ". ");
+            		annotatedBodyPgn.append((moveCounter - 1) / 2 + 1 + ". ");
             	}
             	
             	int totalVariationsNextMove = Optional.ofNullable(gameToVariationsMap.get(moveCounter + 1))
@@ -149,19 +147,29 @@ public class AnnotatedPgnMarkerService {
             	if (totalVariationsNextMove > 0 || isMoveWithSymbol(nextMoveSan)) {
                     Move move = new Move(moveStr, board.getSideToMove());
                     board.doMove(move);
-                    annotatedPgn.append(moveSan)
+                    annotatedBodyPgn.append(moveSan)
                                  .append(" { [%csl R")
                                  .append(getDestinationSquare(move))
                                  .append("]} ");
                 } else {
                     board.doMove(new Move(moveStr, board.getSideToMove()));
-                    annotatedPgn.append(moveSan).append(" ");
+                    annotatedBodyPgn.append(moveSan).append(" ");
                 }
             }
-            annotatedPgn.append("\n\n");
-        }
 
-        return annotatedPgn.toString();
+            // we add variation stats in the header
+            VariationStats variationStats = calculateStats(gameToVariationsMap);
+    	    headerPgn.append("[Round \"").append(variationStats.getTotalVariations()).append("\"]\n");
+    	    headerPgn.append("[EventRounds \"").append(variationStats.getTotalMoves()).append("\"]\n");
+    	    headerPgn.append("\n");
+
+            annotatedBodyPgn.append("\n\n");
+            
+            fullOutputPgn.append(headerPgn.toString() + annotatedBodyPgn.toString());
+        }
+        
+        // now we return the complete PGN
+        return fullOutputPgn.toString();
     }
 
     
@@ -279,4 +287,57 @@ public class AnnotatedPgnMarkerService {
             e.printStackTrace();
         }
     }
+    
+    
+    private class VariationStats {
+        private int totalVariations;
+        private int totalMoves;
+
+        // Constructor
+        public VariationStats(int totalVariations, int totalMoves) {
+            this.totalVariations = totalVariations;
+            this.totalMoves = totalMoves;
+        }
+
+        // Getters
+        public int getTotalVariations() {
+            return totalVariations;
+        }
+
+        public int getTotalMoves() {
+            return totalMoves;
+        }
+    }
+
+    /**
+     * Calculates statistical data from the given map of game variations.
+     * <p>
+     * This method iterates through the provided map, which associates game moves
+     * with their variations, and calculates two key statistics:
+     * <ul>
+     * <li><b>Total Variations:</b> The sum of all variations across all moves.</li>
+     * <li><b>Total Moves:</b> The total number of individual moves within all variations.</li>
+     * </ul>
+     * 
+     * @param gameToVariationsMap A map where each key is an integer representing a move, 
+     *                            and the value is another map that holds the variations 
+     *                            for that move, each associated with its own integer key.
+     *                            The inner map's values are MoveList objects representing 
+     *                            the individual moves in each variation.
+     * @return A {@link VariationStats} object containing the total number of variations and the total 
+     *         number of moves across all variations in the provided map.
+     */    
+    private VariationStats calculateStats(Map<Integer, Map<Integer, MoveList>> gameToVariationsMap) {
+        int totalVariations = 0;
+        int totalMoves = 0;
+
+        for (Map<Integer, MoveList> variationsMap : gameToVariationsMap.values()) {
+            totalVariations += variationsMap.size();
+            for (MoveList moveList : variationsMap.values()) {
+                totalMoves += moveList.size();
+            }
+        }
+
+        return new VariationStats(totalVariations, totalMoves);
+    }    
 }

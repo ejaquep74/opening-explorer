@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.ejaque.openingexplorer.customlibs.chesslib.CustomPgnHolder;
@@ -22,6 +23,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AnnotatedPgnMarkerService {
 
+    @Value("${pgnAnnotator.processing.batchSize}")
+    private int batchSize;  // N games after which to write to file
+
+
     /**
      * Saves the annotated PGN to a file.
      *
@@ -30,152 +35,149 @@ public class AnnotatedPgnMarkerService {
      * @throws Exception If an error occurs during processing or writing to the file.
      */
     public void saveAnnotatedPgnToFile(String inputPgnFilePath, String outputPgnFilePath) throws Exception {
-        String annotatedPgn = markImportantMovesInPgn(inputPgnFilePath);
-
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPgnFilePath))) {
-            writer.write(annotatedPgn);
-            log.info("PROCESS COMPLETE. See file: " + outputPgnFilePath);
-        } catch (IOException e) {
-            log.error("Error writing the annotated PGN to file: " + outputPgnFilePath, e);
-            throw e;
-        }
-    }
+        markImportantMovesInPgn(inputPgnFilePath, outputPgnFilePath);
+        log.info("PROCESS COMPLETE. See file: " + outputPgnFilePath);
+    }  
     
-    
-    public String markImportantMovesInPgn(String pgnFilePath) throws Exception {
+    public void markImportantMovesInPgn(String pgnFilePath, String outputFilePath) throws Exception {
         CustomPgnHolder pgn = new CustomPgnHolder(pgnFilePath);
-        
-        try {
-        	pgn.loadPgn();
-        } catch (Exception e) {
-        	log.error("ERROR LOADING PGN", e);
-        	throw e;
-        }
+        pgn.loadPgn();
 
-        StringBuilder fullOutputPgn = new StringBuilder();
-        
-        for (Game game : pgn.getGames()) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath, true))) {
+            int gameCount = 0;
 
-            StringBuilder headerPgn = new StringBuilder();		// game header (PGN)
-            StringBuilder annotatedBodyPgn = new StringBuilder();   // game body (PGN)
+            for (Game game : pgn.getGames()) {
+               
+	            StringBuilder headerPgn = new StringBuilder();		// game header (PGN)
+	            StringBuilder annotatedBodyPgn = new StringBuilder();   // game body (PGN)
+	
+	        	// Append game headers only if they and their sub-properties are not null
+	        	if (game.getRound() != null && game.getRound().getEvent() != null) {
+	        	    if (game.getRound().getEvent().getName() != null) {
+	        	        headerPgn.append("[Event \"").append(game.getRound().getEvent().getName()).append("\"]\n");
+	        	    }
+	        	    if (game.getRound().getEvent().getStartDate() != null) {
+	        	        headerPgn.append("[EventDate \"").append(game.getRound().getEvent().getStartDate()).append("\"]\n");
+	        	    }
+	        	    if (game.getRound().getEvent().getEventType() != null) {
+	        	        headerPgn.append("[EventType \"").append(game.getRound().getEvent().getEventType()).append("\"]\n");
+	        	    }
+	        	    if (game.getRound().getEvent().getSite() != null) {
+	        	        headerPgn.append("[Site \"").append(game.getRound().getEvent().getSite()).append("\"]\n");
+	        	    }
+	        	}
+	
+	        	if (game.getDate() != null) {
+	        	    headerPgn.append("[Date \"").append(game.getDate()).append("\"]\n");
+	        	}
+	
+	        	if (game.getWhitePlayer() != null) {
+	        	    headerPgn.append("[White \"").append(game.getWhitePlayer()).append("\"]\n");
+	        	    if (game.getWhitePlayer().getElo() > 0) {
+	        	        headerPgn.append("[WhiteElo \"").append(game.getWhitePlayer().getElo()).append("\"]\n");
+	        	    }
+	        	}
+	
+	        	if (game.getBlackPlayer() != null) {
+	        	    headerPgn.append("[Black \"").append(game.getBlackPlayer()).append("\"]\n");
+	        	    if (game.getBlackPlayer().getElo() > 0) {
+	        	        headerPgn.append("[BlackElo \"").append(game.getBlackPlayer().getElo()).append("\"]\n");
+	        	    }
+	        	}
+	
+	        	if (game.getResult() != null && game.getResult().getDescription() != null) {
+	        	    headerPgn.append("[Result \"").append(game.getResult().getDescription()).append("\"]\n");
+	        	}
+	
+	        	if (game.getAnnotator() != null) {
+	        	    headerPgn.append("[Annotator \"").append(game.getAnnotator()).append("\"]\n");
+	        	}
+	
+	        	if (game.getPlyCount() != null) {
+	        	    headerPgn.append("[PlyCount \"").append(game.getPlyCount()).append("\"]\n");
+	        	}
+	
+	        	if (game.getEco() != null) {
+	        	    headerPgn.append("[ECO \"").append(game.getEco()).append("\"]\n");
+	        	}
+	
+	        	if (game.getOpening() != null) {
+	        	    headerPgn.append("[Opening \"").append(game.getOpening()).append("\"]\n");
+	        	}
+	
+	            Board board = new Board();
+	            MoveList moveList = game.getHalfMoves();
+	            String[] moves = moveList.toString().split("\\s+");
+	            Map<Integer, Map<Integer, MoveList>> gameToVariationsMap = getGameToVariationsMap(game);
+	
+	        	int moveCounter = 0;
+	        	int moveIndex = 0;
+	        	
+	            for (String moveStr : moves) {
+	
+	            	moveCounter++;
+	            	
+	            	// the last move is not relevant, as we will never mark this
+	            	if (moveCounter == moveList.size()) continue;
+	            	
+	            	// add the move number
+	            	if ((moveCounter - 1) % 2 == 0) {
+	            		annotatedBodyPgn.append((moveCounter - 1) / 2 + 1 + ". ");
+	            	}
+	            	
+	            	int totalVariationsNextMove = Optional.ofNullable(gameToVariationsMap.get(moveCounter + 1))
+	                        .map(variations -> variations.size())
+	                        .orElse(0);
+	            	
+	            	String moveSan = "";
+	            	String nextMoveSan = "";
+	            	
+	            	if (moveCounter > 1) {
+	            		nextMoveSan = moveList.get(moveCounter).getSan();
+	            	}
+	            	
+	            	if (moveCounter < moveList.size()) {
+	            		moveSan = moveList.get(moveCounter - 1).getSan();
+	            	}
+	            	
+	            	log.debug("TOTAL: moveCounter={} moveSan={} totalVariations={}", moveCounter, moveSan, totalVariationsNextMove);
+	            	
+	            	if (totalVariationsNextMove > 0 || isMoveWithSymbol(nextMoveSan)) {
+	                    Move move = new Move(moveStr, board.getSideToMove());
+	                    board.doMove(move);
+	                    annotatedBodyPgn.append(moveSan)
+	                                 .append(" { [%csl R")
+	                                 .append(getDestinationSquare(move))
+	                                 .append("]} ");
+	                } else {
+	                    board.doMove(new Move(moveStr, board.getSideToMove()));
+	                    annotatedBodyPgn.append(moveSan).append(" ");
+	                }
+	            }
+	
+	            // we add variation stats in the header
+	            VariationStats variationStats = calculateStats(gameToVariationsMap);
+	    	    headerPgn.append("[Round \"").append(variationStats.getTotalVariations()).append("\"]\n");
+	    	    headerPgn.append("[EventRounds \"").append(variationStats.getTotalMoves()).append("\"]\n");
+	    	    headerPgn.append("\n");
+	
+	            annotatedBodyPgn.append("\n\n");
+	            
+	            // Write processed game to the file
+	            writer.append(headerPgn.toString() + annotatedBodyPgn.toString());
+	            gameCount++;
 
-        	// Append game headers only if they and their sub-properties are not null
-        	if (game.getRound() != null && game.getRound().getEvent() != null) {
-        	    if (game.getRound().getEvent().getName() != null) {
-        	        headerPgn.append("[Event \"").append(game.getRound().getEvent().getName()).append("\"]\n");
-        	    }
-        	    if (game.getRound().getEvent().getStartDate() != null) {
-        	        headerPgn.append("[EventDate \"").append(game.getRound().getEvent().getStartDate()).append("\"]\n");
-        	    }
-        	    if (game.getRound().getEvent().getEventType() != null) {
-        	        headerPgn.append("[EventType \"").append(game.getRound().getEvent().getEventType()).append("\"]\n");
-        	    }
-        	    if (game.getRound().getEvent().getSite() != null) {
-        	        headerPgn.append("[Site \"").append(game.getRound().getEvent().getSite()).append("\"]\n");
-        	    }
-        	}
-
-        	if (game.getDate() != null) {
-        	    headerPgn.append("[Date \"").append(game.getDate()).append("\"]\n");
-        	}
-
-        	if (game.getWhitePlayer() != null) {
-        	    headerPgn.append("[White \"").append(game.getWhitePlayer()).append("\"]\n");
-        	    if (game.getWhitePlayer().getElo() > 0) {
-        	        headerPgn.append("[WhiteElo \"").append(game.getWhitePlayer().getElo()).append("\"]\n");
-        	    }
-        	}
-
-        	if (game.getBlackPlayer() != null) {
-        	    headerPgn.append("[Black \"").append(game.getBlackPlayer()).append("\"]\n");
-        	    if (game.getBlackPlayer().getElo() > 0) {
-        	        headerPgn.append("[BlackElo \"").append(game.getBlackPlayer().getElo()).append("\"]\n");
-        	    }
-        	}
-
-        	if (game.getResult() != null && game.getResult().getDescription() != null) {
-        	    headerPgn.append("[Result \"").append(game.getResult().getDescription()).append("\"]\n");
-        	}
-
-        	if (game.getAnnotator() != null) {
-        	    headerPgn.append("[Annotator \"").append(game.getAnnotator()).append("\"]\n");
-        	}
-
-        	if (game.getPlyCount() != null) {
-        	    headerPgn.append("[PlyCount \"").append(game.getPlyCount()).append("\"]\n");
-        	}
-
-        	if (game.getEco() != null) {
-        	    headerPgn.append("[ECO \"").append(game.getEco()).append("\"]\n");
-        	}
-
-        	if (game.getOpening() != null) {
-        	    headerPgn.append("[Opening \"").append(game.getOpening()).append("\"]\n");
-        	}
-
-            Board board = new Board();
-            MoveList moveList = game.getHalfMoves();
-            String[] moves = moveList.toString().split("\\s+");
-            Map<Integer, Map<Integer, MoveList>> gameToVariationsMap = getGameToVariationsMap(game);
-
-        	int moveCounter = 0;
-        	int moveIndex = 0;
-        	
-            for (String moveStr : moves) {
-
-            	moveCounter++;
-            	
-            	// the last move is not relevant, as we will never mark this
-            	if (moveCounter == moveList.size()) continue;
-            	
-            	// add the move number
-            	if ((moveCounter - 1) % 2 == 0) {
-            		annotatedBodyPgn.append((moveCounter - 1) / 2 + 1 + ". ");
-            	}
-            	
-            	int totalVariationsNextMove = Optional.ofNullable(gameToVariationsMap.get(moveCounter + 1))
-                        .map(variations -> variations.size())
-                        .orElse(0);
-            	
-            	String moveSan = "";
-            	String nextMoveSan = "";
-            	
-            	if (moveCounter > 1) {
-            		nextMoveSan = moveList.get(moveCounter).getSan();
-            	}
-            	
-            	if (moveCounter < moveList.size()) {
-            		moveSan = moveList.get(moveCounter - 1).getSan();
-            	}
-            	
-            	log.debug("TOTAL: moveCounter={} moveSan={} totalVariations={}", moveCounter, moveSan, totalVariationsNextMove);
-            	
-            	if (totalVariationsNextMove > 0 || isMoveWithSymbol(nextMoveSan)) {
-                    Move move = new Move(moveStr, board.getSideToMove());
-                    board.doMove(move);
-                    annotatedBodyPgn.append(moveSan)
-                                 .append(" { [%csl R")
-                                 .append(getDestinationSquare(move))
-                                 .append("]} ");
-                } else {
-                    board.doMove(new Move(moveStr, board.getSideToMove()));
-                    annotatedBodyPgn.append(moveSan).append(" ");
-                }
-            }
-
-            // we add variation stats in the header
-            VariationStats variationStats = calculateStats(gameToVariationsMap);
-    	    headerPgn.append("[Round \"").append(variationStats.getTotalVariations()).append("\"]\n");
-    	    headerPgn.append("[EventRounds \"").append(variationStats.getTotalMoves()).append("\"]\n");
-    	    headerPgn.append("\n");
-
-            annotatedBodyPgn.append("\n\n");
-            
-            fullOutputPgn.append(headerPgn.toString() + annotatedBodyPgn.toString());
-        }
-        
-        // now we return the complete PGN
-        return fullOutputPgn.toString();
+	            // Flush to file every N games
+	            if (gameCount % batchSize == 0) {
+	            	log.debug("WRITING TO FILE.  gameCount={}", gameCount);
+	                writer.flush(); // Flush after writing every N games
+	            }
+	        }
+	        writer.flush(); // Ensure the last set of games is written
+	    } catch (IOException e) {
+	        log.error("Error writing the annotated PGN to file: " + outputFilePath, e);
+	        throw e;
+	    }        
     }
 
     
@@ -207,7 +209,7 @@ public class AnnotatedPgnMarkerService {
                     variantIndex = translateVariation(variationsMap, game, var, -1,
                             variantIndex, index, moveCounter);
                     
-                    log.debug("ADDING VARIATIONS to move. moveIndex={} variationsMap={}", index, variationsMap);
+                    log.trace("ADDING VARIATIONS to move. moveIndex={} variationsMap={}", index, variationsMap);
                     gameToVariationsMap.put(index, variationsMap);
                 }
             }
@@ -254,7 +256,7 @@ public class AnnotatedPgnMarkerService {
 						terminated = true;
 						sb.append(") ");
 					}
-					log.debug("ADDING VARIATION.  index={} variation={}", variantIndex, child);
+					log.trace("ADDING VARIATION.  index={} variation={}", variantIndex, child);
 					returnedVariationMap.put(variantIndex, child);
 					variantIndex = translateVariation(returnedVariationMap, game, child, variantIndexOld, variantIndex, idx, mc);
 				}
@@ -283,17 +285,6 @@ public class AnnotatedPgnMarkerService {
     private String getDestinationSquare(Move move) {
         return move.getTo().toString().toLowerCase();
     }
-
-    public static void main(String[] args) throws Exception {
-        AnnotatedPgnMarkerService service = new AnnotatedPgnMarkerService();
-        try {
-            String annotatedPgn = service.markImportantMovesInPgn("C:/Users/eajaquep/Documents/tal-korchnoi.pgn");
-            System.out.println(annotatedPgn);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-    
     
     private class VariationStats {
         private int totalVariations;

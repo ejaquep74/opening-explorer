@@ -19,8 +19,8 @@ public class AnnotatedPgnMarkerServiceIT {
     public void testSearchBestMoveIntegration() throws Exception {
         try {
             annotatedPgnMarkerService.saveAnnotatedPgnToFile(
-            		"C:/Users/eajaquep/Documents/mega-annotated1.pgn", 
-            		"C:/Users/eajaquep/Documents/MARKED-mega-annotated1.pgn");
+            		"C:/Users/eajaquep/Documents/mega-annotated3.pgn", 
+            		"C:/Users/eajaquep/Documents/MARKED-mega-annotated3.pgn");
         } catch (IOException e) {
             e.printStackTrace();
         }

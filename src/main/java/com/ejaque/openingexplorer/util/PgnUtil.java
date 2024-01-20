@@ -26,7 +26,7 @@ public class PgnUtil {
 //        return line;
 //    }
 
-    public static String processLine(String line) {
+    public static String removeNullMovesFromGame(String pgnLine) {
         StringBuilder result = new StringBuilder();
         int depth = 0;
         int z0Depth = Integer.MAX_VALUE;
@@ -37,8 +37,8 @@ public class PgnUtil {
         boolean bracesOpened = false;
         boolean parenthesesOpened = false;
         	
-        for (int i = 0; i < line.length(); i++) {
-            currentChar = line.charAt(i);
+        for (int i = 0; i < pgnLine.length(); i++) {
+            currentChar = pgnLine.charAt(i);
             
             // we check if we are opening a bracket (these are pgn comments that can be just added to output without any checks
             if (currentChar == '{') {
@@ -83,16 +83,16 @@ public class PgnUtil {
             }
 
             // Check for "Z0" or "z0"
-            if (!z0Found && ((currentChar == 'Z' || currentChar == 'z') && i + 1 < line.length() && line.charAt(i + 1) == '0') ) {
+            if (!z0Found && ((currentChar == 'Z' || currentChar == 'z') && i + 1 < pgnLine.length() && pgnLine.charAt(i + 1) == '0') ) {
                 if (depth > 0) {
                     z0Found = true;
                     z0Depth = depth;
                     int lastIndex = result.lastIndexOf("(");
                     if (lastIndex > -1) {
-                    	log.info("PGN line has (Z0) section. Line:\n{}", line);
+                    	log.info("PGN line has (Z0) section. Line:\n{}", pgnLine);
                     	result.delete(lastIndex, result.length());
                     } else {
-                    	log.error("PGN line with no starting parenthesis before Z0\n{}", line);
+                    	log.error("PGN line with no starting parenthesis before Z0\n{}", pgnLine);
                     }
                 } else {
                     // Z0 or z0 found outside of any parentheses, return an empty string
@@ -118,7 +118,11 @@ public class PgnUtil {
         return result.toString();
     }
 	
-	
+	/**
+	 * Process a PGN file to eliminate all variations with Z0 (null moves) or FEN codes (special start positions).
+	 * @param inputFilePath
+	 * @param outputFilePath
+	 */
     public static void processFile(String inputFilePath, String outputFilePath) {
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFilePath));
              BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath))) {
@@ -143,7 +147,7 @@ public class PgnUtil {
                 	hasEventHeader = false;  // reset this flag as we are ready to process next game
                 	
                     if (!pgnHasFenPosition) {
-	                	line = processLine(line);
+	                	line = removeNullMovesFromGame(line);
 	                	writer.newLine();
 	                    writer.write(line);
 	                    writer.newLine();

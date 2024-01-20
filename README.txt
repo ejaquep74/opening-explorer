@@ -1,3 +1,5 @@
+
+AnnotatedPgnMarkerServiceIT.testSearchBestMoveIntegration():  generate PGN with all game moves MARKED before analyzed variations 
 PgnUtil:  has method processFile to clear all Z0 (null) moves
 
 

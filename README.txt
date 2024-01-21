@@ -1,7 +1,8 @@
 
-AnnotatedPgnMarkerServiceIT.testSearchBestMoveIntegration():  generate PGN with all game moves MARKED before analyzed variations 
-PgnUtil:  has method processFile to clear all Z0 (null) moves
+CLASS AnnotatedPgnMarkerServiceIT.testSearchBestMoveIntegration():  generate PGN with all game moves MARKED before analyzed variations 
 
+CLASS PgnUtil:  has method processFile to clear all Z0 (null) moves
+*** I suggest running PgnUtil with Xms 2GB and Xmx 4GB, to avoid problems with heap space. With those params, processing 130.000 games divided in 3 files, it was succesful. So files with 45.000 games aprox should be ok
 
 
 OK vs PEND stuff:
@@ -16,7 +17,7 @@ PEND: to estimate probability of a position, you have to sum the probability of 
 
 PEND: connect to chessbase "api" (does not exist but could be scraped) to get info like moves' stats and cpu eval stats for all moves.
 
-PEND: Rating Performance: calculate the opponent's rating avg of a move by exploring one move deeper and taking weighted avg of all avg rating for each reply. With this rtg avg for each color, and the info on W/D/L you can calculate the rating performance.
+PEND: EloUtil.getPerformance(double, double) FIX Rating Performance: calculate the opponent's rating avg of a move by exploring one move deeper and taking weighted avg of all avg rating for each reply. With this rtg avg for each color, and the info on W/D/L you can calculate the rating performance.
 
 PEND: Use a PGN with player repertoire for choosing which moves to explore from his side.
 

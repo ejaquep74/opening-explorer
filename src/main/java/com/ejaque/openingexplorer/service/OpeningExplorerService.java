@@ -1,6 +1,7 @@
 package com.ejaque.openingexplorer.service;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -95,7 +97,7 @@ public class OpeningExplorerService {
 	 * often than one transaction per second.
 	 */
     @Value("${throttling.minTimeBetweenCalls}")
-	private long minTimeBetweenCalls = 1200;
+	private long minTimeBetweenCalls = 1100;
 
     @Autowired
     private ExcelExportService excelExportService;
@@ -182,6 +184,7 @@ public class OpeningExplorerService {
 
     	double avgRatingForAllValidMoves = 0.0;  	// all "valid" moves that have a minimum games played
     	double avgRatingForAllMoves = 0.0;			// all "moves", for doing stats		
+    	List<GoodMove> goodMovesFound = new ArrayList<>();
     	
     	log.debug("Remaining DEPTH=" + remainingDepth);
     	if (remainingDepth == 0 && !isExtraDepthCall) {
@@ -189,7 +192,33 @@ public class OpeningExplorerService {
             return avgRatingForAllValidMoves; // Stop recursion at depth 0
         }
     	
-        String encodedFen = URLEncoder.encode(fen, "UTF-8");
+        avgRatingForAllMoves = callLichessApiPositionStats(fen, color, remainingDepth, parentProbability,
+				isExtraDepthCall, avgRatingForAllValidMoves, avgRatingForAllMoves, goodMovesFound);
+        
+        return avgRatingForAllMoves;
+    }
+
+    /**
+     * 
+     * @param fen
+     * @param color
+     * @param remainingDepth
+     * @param parentProbability
+     * @param isExtraDepthCall
+     * @param avgRatingForAllValidMoves
+     * @param avgRatingForAllMoves
+     * @param goodMovesFound EMPTY if we are to find this moves, and NOT EMPTY if they are already found and we just need to add stats to them.
+     * @return
+     * @throws UnsupportedEncodingException
+     * @throws InterruptedException
+     * @throws IOException
+     * @throws ClientProtocolException
+     * @throws Exception
+     */
+	private double callLichessApiPositionStats(String fen, String color, int remainingDepth, double parentProbability,
+			boolean isExtraDepthCall, double avgRatingForAllValidMoves, double avgRatingForAllMoves, List<GoodMove> goodMovesFound)
+			throws UnsupportedEncodingException, InterruptedException, IOException, ClientProtocolException, Exception {
+		String encodedFen = URLEncoder.encode(fen, "UTF-8");
         
         String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=2200,2500&fen=" + encodedFen;
 
@@ -230,7 +259,6 @@ public class OpeningExplorerService {
         	if (totalGamesStartingPosition == null && remainingDepth == maxDepthHalfMoves) {
         		totalGamesStartingPosition = totalGames;
         	}
-
             
             List<Integer> averageRatings = new ArrayList<>();
             List<Integer> averageRatingRanks = new ArrayList<>();
@@ -376,9 +404,8 @@ public class OpeningExplorerService {
         	log.error("ERROR IN RESPONSE...");
         	log.error("response: " + response);
         }
-        
-        return avgRatingForAllMoves;
-    }
+		return avgRatingForAllMoves;
+	}
     
     
 

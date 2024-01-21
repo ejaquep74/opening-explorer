@@ -44,7 +44,7 @@ public class ExcelExportService {
         headerRow.createCell(6).setCellValue("Average Rating");
         headerRow.createCell(7).setCellValue("Average Rating Opponents");
         headerRow.createCell(8).setCellValue("White Points Pct");
-        headerRow.createCell(9).setCellValue("Performance");
+        // FIXME: add performance when it is well calculated:  headerRow.createCell(9).setCellValue("Performance");
     }
 
     private void writeGoodMove(GoodMove move, Row row) {

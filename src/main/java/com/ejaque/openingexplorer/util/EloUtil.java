@@ -9,6 +9,8 @@ public class EloUtil {
 	 * @return
 	 */
     public static double getPerformance(double elo, double pointsPctg) {
+    	// FIXME: this needs to be reviewed, considering playerElo, elo of opponents and pointsPctg
+    	
         // Check for the edge cases where EA is 0 or 1 to prevent division by zero or logarithm of zero.
         if (pointsPctg == 0) {
             return Double.POSITIVE_INFINITY;

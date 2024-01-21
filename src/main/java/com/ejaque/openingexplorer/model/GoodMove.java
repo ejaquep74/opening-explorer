@@ -61,4 +61,10 @@ public class GoodMove {
 	private double averageRatingOpponents;
 	private double totalGames;
 	private double whitePointsPctg;
+	private double topTierAverageRating;
+	private double topTierAverageRatingForAllMoves;
+	private double topTierAverageRatingOpponents;
+	private double topTierTotalGames;
+	private double topTierWhitePointsPctg;
+
 }

@@ -44,6 +44,11 @@ public class ExcelExportService {
         headerRow.createCell(6).setCellValue("Average Rating");
         headerRow.createCell(7).setCellValue("Average Rating Opponents");
         headerRow.createCell(8).setCellValue("White Points Pct");
+        headerRow.createCell(9).setCellValue("Total Games Position");
+        headerRow.createCell(10).setCellValue("Total Games Move");
+        headerRow.createCell(11).setCellValue("Popularity%");
+        
+        
         // FIXME: add performance when it is well calculated:  headerRow.createCell(9).setCellValue("Performance");
     }
 
@@ -76,7 +81,16 @@ public class ExcelExportService {
         cell.setCellValue(move.getWhitePointsPctg());
 
         cell = row.createCell(9);
-        cell.setCellValue(move.getPerformance());
+        cell.setCellValue(move.getTotalGames());
+
+        cell = row.createCell(10);
+        cell.setCellValue(move.getTotalGamesMove());
+
+        cell = row.createCell(11);
+        cell.setCellValue(move.getPopularity());
+
+        //cell = row.createCell(9);
+        //cell.setCellValue(move.getPerformance());
 
     }
 }

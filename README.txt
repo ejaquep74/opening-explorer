@@ -9,6 +9,8 @@ OK vs PEND stuff:
 
 OK: change the output, so it will be an XSLX file with the list of moves and stats
 
+PEND: add in the Excel a Mark "ERROR" with number of errors so we know if we have PROBLEMS with throttling and Lichess (we didnt explore all the possible moves)
+
 PEND: add lichess cloud eval for moves (use lichess api)
 
 PEND: for each "good move" do an additional check comparing with the stats of 2200 rating section (normal is 2500). We can check for differences in pctg between rating groups (higer level player may choose more often this "good moves").

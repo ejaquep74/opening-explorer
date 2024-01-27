@@ -220,7 +220,7 @@ public class OpeningExplorerService {
 			throws UnsupportedEncodingException, InterruptedException, IOException, ClientProtocolException, Exception {
 		String encodedFen = URLEncoder.encode(fen, "UTF-8");
         
-        String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=2200,2500&fen=" + encodedFen;
+        String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=2500&fen=" + encodedFen;
 
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         credentialsProvider.setCredentials(
@@ -237,8 +237,8 @@ public class OpeningExplorerService {
         if (elapsedTime < minTimeBetweenCalls) {
         	long remainingTime = minTimeBetweenCalls - elapsedTime;
         	Thread.sleep(remainingTime);  						// wait some time to total a full second since last calling URL, to avoid Http Error 429
-        	lastTimeCalledLichess = System.currentTimeMillis(); // i am just about to call so I record the time here 
         }
+    	lastTimeCalledLichess = System.currentTimeMillis(); // i am just about to call so I record the time here 
         
         log.info("Call URL: " + apiUrl);
         log.info("FEN: " + fen);
@@ -283,7 +283,7 @@ public class OpeningExplorerService {
             	}
 
             	totalGamesForAllMoves = totalGamesForAllMoves + totalGamesMove;
-            	avgRatingForAllMoves = avgRatingForAllValidMoves + (double) averageRating * totalGamesMove / AVG_RATING;
+            	avgRatingForAllMoves = avgRatingForAllMoves + (double) averageRating * totalGamesMove / AVG_RATING;
             }
             
             // we multiply for AVG_RATING to cancel out the division we did before (this is only for avoiding numeric overflows).
@@ -388,6 +388,8 @@ public class OpeningExplorerService {
                     		.averageRatingOpponents(averageRatingOpponents)
                     		.ratingRank(averageRatingRanks.get(i))
                     		.ratingPercentile(ratingPercentile)
+                    		.popularity(popularityPctg)
+                    		.totalGamesMove(totalGamesMove)
                     		.fen(fen)
                     		.probabilityOcurring(parentProbability)
                     		.rawProbability(rawProbability)

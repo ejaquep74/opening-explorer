@@ -155,7 +155,10 @@ public class OpeningExplorerService {
 	private double minProbabilityOfMove;
 
     @Value("${searchParams.minGamesToExploreOpponentMove}")    
-	private double minGamesToExploreOpponentMove;    
+	private double minGamesToExploreOpponentMove;
+    
+    @Value("${searchParams.ratingRange}")    
+	private String ratingRange;    
     
 
     /** Starts the search for good moves. */
@@ -220,7 +223,7 @@ public class OpeningExplorerService {
 			throws UnsupportedEncodingException, InterruptedException, IOException, ClientProtocolException, Exception {
 		String encodedFen = URLEncoder.encode(fen, "UTF-8");
         
-        String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=2500&fen=" + encodedFen;
+        String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=" + ratingRange + "&fen=" + encodedFen;
 
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         credentialsProvider.setCredentials(

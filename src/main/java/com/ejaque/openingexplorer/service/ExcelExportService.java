@@ -19,7 +19,19 @@ public class ExcelExportService {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Good Moves");
 
-        createHeaderRow(sheet);
+        CellStyle headerStyle = workbook.createCellStyle();
+        Font headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerStyle.setFont(headerFont);
+
+        createHeaderRow(sheet, headerStyle);
+
+        // Set column widths  
+        sheet.setColumnWidth(0, 72 * 256); // 72 times the standard width
+        int[] wideColumns = {2, 3, 4, 5, 6, 7, 8, 9, 10}; // C, D, E, F, G, H, I, J, K
+        for (int colIndex : wideColumns) {
+            sheet.setColumnWidth(colIndex, 16 * 256); // 16 times the standard width
+        }
 
         int rowCount = 1;
         for (GoodMove move : goodMoves) {
@@ -32,24 +44,20 @@ public class ExcelExportService {
         }
     }
 
-    private void createHeaderRow(Sheet sheet) {
+    private void createHeaderRow(Sheet sheet, CellStyle headerStyle) {
         Row headerRow = sheet.createRow(0);
 
-        headerRow.createCell(0).setCellValue("FEN");
-        headerRow.createCell(1).setCellValue("Move");
-        headerRow.createCell(2).setCellValue("Probability Occurring");
-        headerRow.createCell(3).setCellValue("Rating Rank");
-        headerRow.createCell(4).setCellValue("Rating Percentile");
-        headerRow.createCell(5).setCellValue("Average Rating For All Moves");
-        headerRow.createCell(6).setCellValue("Average Rating");
-        headerRow.createCell(7).setCellValue("Average Rating Opponents");
-        headerRow.createCell(8).setCellValue("White Points Pct");
-        headerRow.createCell(9).setCellValue("Total Games Position");
-        headerRow.createCell(10).setCellValue("Total Games Move");
-        headerRow.createCell(11).setCellValue("Popularity%");
-        
-        
-        // FIXME: add performance when it is well calculated:  headerRow.createCell(9).setCellValue("Performance");
+        String[] headers = {"FEN", "Move", "Probability Occurring", "Rating Rank", 
+                            "Rating Percentile", "Average Rating For All Moves", 
+                            "Average Rating", "Average Rating Opponents", 
+                            "White Points Pct", "Games Position", "Games Move", 
+                            "Popularity%", "Ratio"};
+
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
     }
 
     private void writeGoodMove(GoodMove move, Row row) {
@@ -70,10 +78,10 @@ public class ExcelExportService {
 
         cell = row.createCell(5);
         cell.setCellValue(move.getAverageRatingForAllMoves());
-        
+
         cell = row.createCell(6);
         cell.setCellValue(move.getAverageRating());
-        
+
         cell = row.createCell(7);
         cell.setCellValue(move.getAverageRatingOpponents());
 
@@ -89,8 +97,16 @@ public class ExcelExportService {
         cell = row.createCell(11);
         cell.setCellValue(move.getPopularity());
 
-        //cell = row.createCell(9);
-        //cell.setCellValue(move.getPerformance());
+        // Calculate and set the Ratio value
+        double averageRatingForAllMoves = move.getAverageRatingForAllMoves();
+        double averageRating = move.getAverageRating();
 
+        cell = row.createCell(12); // Ratio column
+        if (averageRatingForAllMoves != 0) {
+            double ratio = averageRating / averageRatingForAllMoves;
+            cell.setCellValue(ratio);
+        } else {
+            cell.setCellValue("N/A"); // Or some other placeholder if division by zero
+        }
     }
 }

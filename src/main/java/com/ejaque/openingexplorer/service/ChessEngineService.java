@@ -30,12 +30,12 @@ public class ChessEngineService {
         
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://ChessEngine.me/billing/order_server?" + queryParameters))
-                .header("Authority", "ChessEngine.me")
+                .uri(URI.create("https://chessify.me/billing/order_server?" + queryParameters))
+                .header("Authority", "chessify.me")
                 .header("Accept", "*/*")
                 .header("Accept-Language", "en-US,en;q=0.9")
                 .header("Cookie", "_gcl_au=1.1.381066609.1709328585; _fbp=fb.1.1709328585304.867533032; _gid=GA1.2.2107996877.1709328585; _ga=GA1.2.502668357.1709328585; _ga_XCG3GMLS4X=GS1.2.1709328585.1.1.1709328587.58.0.0; session_id=8uq6o4d8r371ut05gdv5y01v12wxsjiu; csrftoken=orQqZz3goljZg2qu4mdQhSzWRcu037CT3p2auuR3NuFTnyajjRLxtrTvWlOQMOHG")
-                .header("Referer", "https://ChessEngine.me/analysis")
+                .header("Referer", "https://chessify.me/analysis")
                 .header("sec-ch-ua", "\"Chromium\";v=\"122\", \"Not(A:Brand\";v=\"24\", \"Google Chrome\";v=\"122\"")
                 .header("sec-ch-ua-mobile", "?0")
                 .header("sec-ch-ua-platform", "\"Windows\"")
@@ -53,11 +53,11 @@ public class ChessEngineService {
     private String getChessEngineWssUrl() throws Exception {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://ChessEngine.me/user_account/user_servers_info"))
+                .uri(URI.create("https://chessify.me/user_account/user_servers_info"))
                 .header("Accept", "*/*")
                 .header("Accept-Language", "en-US,en;q=0.9")
                 .header("Cookie", "_gcl_au=1.1.381066609.1709328585; _fbp=fb.1.1709328585304.867533032; _gid=GA1.2.2107996877.1709328585; _ga=GA1.2.502668357.1709328585; _ga_XCG3GMLS4X=GS1.2.1709328585.1.1.1709328587.58.0.0; session_id=8uq6o4d8r371ut05gdv5y01v12wxsjiu; csrftoken=orQqZz3goljZg2qu4mdQhSzWRcu037CT3p2auuR3NuFTnyajjRLxtrTvWlOQMOHG")
-                .header("Referer", "https://ChessEngine.me/analysis")
+                .header("Referer", "https://chessify.me/analysis")
                 .header("sec-ch-ua", "\"Chromium\";v=\"122\", \"Not(A:Brand\";v=\"24\", \"Google Chrome\";v=\"122\"")
                 .header("sec-ch-ua-mobile", "?0")
                 .header("sec-ch-ua-platform", "\"Windows\"")
@@ -89,7 +89,7 @@ public class ChessEngineService {
         WebSocket.Builder builder = client.newWebSocketBuilder();
 
         builder.header("Pragma", "no-cache")
-               .header("Origin", "https://ChessEngine.me")
+               .header("Origin", "https://chessify.me")
                .header("Accept-Language", "en-US,en;q=0.9")
                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
                .header("Cookie", "_gcl_au=1.1.381066609.1709328585; _fbp=fb.1.1709328585304.867533032; _gid=GA1.2.2107996877.1709328585; _ga=GA1.2.502668357.1709328585; _ga_XCG3GMLS4X=GS1.2.1709328585.1.1.1709328587.58.0.0; session_id=8uq6o4d8r371ut05gdv5y01v12wxsjiu; csrftoken=orQqZz3goljZg2qu4mdQhSzWRcu037CT3p2auuR3NuFTnyajjRLxtrTvWlOQMOHG");
@@ -142,7 +142,6 @@ public class ChessEngineService {
     	log.info("START..");
     	ChessEngineService client = new ChessEngineService();
         client.createChessEngineServer();
-    	String wssUrl = client.getChessEngineWssUrl(); 
         client.startWSSConnection();
         client.sendCommands();
     }

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.math3.util.Precision;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.CredentialsProvider;
@@ -19,10 +20,15 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import com.ejaque.openingexplorer.config.Constants;
+import com.ejaque.openingexplorer.event.EvaluationResultEvent;
+import com.ejaque.openingexplorer.model.EvaluationResult;
 import com.ejaque.openingexplorer.model.GoodMove;
 import com.ejaque.openingexplorer.util.EloUtil;
+import com.ejaque.openingexplorer.util.PgnUtil;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Piece;
 import com.github.bhlangonijr.chesslib.Side;
@@ -30,6 +36,7 @@ import com.github.bhlangonijr.chesslib.Square;
 import com.github.bhlangonijr.chesslib.move.Move;
 import com.github.bhlangonijr.chesslib.move.MoveException;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -98,6 +105,9 @@ public class OpeningExplorerService {
 	 */
     @Value("${throttling.minTimeBetweenCalls}")
 	private long minTimeBetweenCalls = 1100;
+    
+    @Autowired
+    private ChessEngineService chessEngineService;
 
     @Autowired
     private ExcelExportService excelExportService;
@@ -118,6 +128,12 @@ public class OpeningExplorerService {
     
     @Value("${searchParams.startPositionFEN}")
 	private String startPositionFEN;
+    
+	/**
+	 * Engine eval for starting position, it is very important as it is used as
+	 * reference for avoiding "bad moves" when searching.
+	 */
+    private double startPositionEval;
 
     @Value("${searchParams.startPositionColor}")
 	private String startPositionColor;
@@ -142,9 +158,24 @@ public class OpeningExplorerService {
     
     private Integer totalGamesStartingPosition;
     
+	/**
+	 * Maximum difference with best move for the player (is a positive value). For
+	 * example if best move for our WHITE player is 0.7 and max diff is 0.5, we
+	 * tolerate moves with eval >= 0.2. If our player is BLACK, the signs are the
+	 * opposite, so best = -0.7 and eval <= -0.2. So in summary (best - eval) <=
+	 * {+-}0.5. Where depends on WHITE(+) or BLACK (-).
+	 * 
+	 * NOTE: this is used for diff with starting position eval and also for diff with the best move's eval in the current position being searched.
+	 */
+    @Value("${searchParams.maxEvalDiff}")    
+    private double maxEvalDiff;  // TODO: review if we should split this in two params (see NOTE above)
+
+    /** Target depth for engine eval. */
+    @Value("${searchParams.evalDepth}")    
+	private int evalDepth;    
     
 	/**
-	 * Minimum probability of the move to happen. This probability is calculated
+	 * Minimum probability for the move to happen. This probability is calculated
 	 * multiplying the pctg played on each opponent move. For example if the first
 	 * move we try for opponent is played 50% of the time and the second move we
 	 * tried for opponent is played 30%, then the probability of that position
@@ -158,22 +189,30 @@ public class OpeningExplorerService {
 	private double minGamesToExploreOpponentMove;
     
     @Value("${searchParams.ratingRange}")    
-	private String ratingRange;    
+	private String ratingRange;
+    
     
 
     /** Starts the search for good moves. */
     public void startSearch() throws Exception {
-    	searchBestMove(startPositionFEN, startPositionColor, maxDepthHalfMoves, 1.0, false);
+        // BLOCKING call:
+        EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(startPositionFEN);  
+
+        startPositionEval = evaluationResult.getEvaluation();
+        String nextBestMove = evaluationResult.getBestMove();
+
+    	searchBestMove(startPositionFEN, nextBestMove, startPositionColor, maxDepthHalfMoves, 1.0, false);
     }
     
-    /**
+	/**
 	 * Recursively searches for the best moves from the given position, depth, and
 	 * probability. It communicates with the Lichess API, processes the response,
 	 * and applies various criteria to evaluate moves.
 	 * 
 	 * @param fen               FEN for current position
+	 * @param engineBestMove          Best move in this position according to engine  TODO: not used, review
 	 * @param color             Color to play in this move
-	 * @param remainingDepth             Remaining depth, for example starts with depth 10
+	 * @param remainingDepth    Remaining depth, for example starts with depth 10
 	 *                          and ends with 0 when no further searching can be
 	 *                          done.
 	 * @param parentProbability Probability of the opponent reaching this line
@@ -183,7 +222,8 @@ public class OpeningExplorerService {
 	 * @return Avg rating for all valid moves in this position
 	 * @throws Exception
 	 */
-    private double searchBestMove(String fen, String color, int remainingDepth, double parentProbability, boolean isExtraDepthCall) throws Exception {
+	private double searchBestMove(String fen, String engineBestMove, String color, int remainingDepth,
+			double parentProbability, boolean isExtraDepthCall) throws Exception {
 
     	double avgRatingForAllValidMoves = 0.0;  	// all "valid" moves that have a minimum games played
     	double avgRatingForAllMoves = 0.0;			// all "moves", for doing stats		
@@ -192,10 +232,10 @@ public class OpeningExplorerService {
     	log.debug("Remaining DEPTH=" + remainingDepth);
     	if (remainingDepth == 0 && !isExtraDepthCall) {
         	log.info("hitting MAX DEPTH... returning");
-            return avgRatingForAllValidMoves; // Stop recursion at depth 0
+            return avgRatingForAllValidMoves; // Stop recursion at remaining depth = 0
         }
     	
-        avgRatingForAllMoves = callLichessApiPositionStats(fen, color, remainingDepth, parentProbability,
+        avgRatingForAllMoves = callLichessApiPositionStats(fen, engineBestMove, color, remainingDepth, parentProbability,
 				isExtraDepthCall, avgRatingForAllValidMoves, avgRatingForAllMoves, goodMovesFound);
         
         return avgRatingForAllMoves;
@@ -204,6 +244,7 @@ public class OpeningExplorerService {
     /**
      * 
      * @param fen
+     * @param engineBestMove          Best move in this position according to engine   TODO: not used, review
      * @param color
      * @param remainingDepth
      * @param parentProbability
@@ -218,9 +259,10 @@ public class OpeningExplorerService {
      * @throws ClientProtocolException
      * @throws Exception
      */
-	private double callLichessApiPositionStats(String fen, String color, int remainingDepth, double parentProbability,
+	private double callLichessApiPositionStats(String fen, String engineBestMove, String color, int remainingDepth, double parentProbability,
 			boolean isExtraDepthCall, double avgRatingForAllValidMoves, double avgRatingForAllMoves, List<GoodMove> goodMovesFound)
 			throws UnsupportedEncodingException, InterruptedException, IOException, ClientProtocolException, Exception {
+		
 		String encodedFen = URLEncoder.encode(fen, "UTF-8");
         
         String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=" + ratingRange + "&fen=" + encodedFen;
@@ -352,18 +394,49 @@ public class OpeningExplorerService {
                     }
 
                 }
+                
+//                String engineBestMoveFen = PgnUtil.getFinalFen(fen, engineBestMove);
+//                
+//                // BLOCKING call (in reality should rarely block as this evaluation started before calling this method):
+//                EvaluationResult bestMoveEvalResult = chessEngineService.getEvaluationResult(engineBestMoveFen);
+//                
+//                double bestMoveEval = bestMoveEvalResult.getEvaluation();
+                double bestMoveEval = 0.0;  // TODO: not used, check if really need evalDiff bellow...
+                
+                String moveFen = PgnUtil.getFinalFen(fen, move);
+                
+                // BLOCKING call (should block more often if engine is slower than opening exploring):
+                EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(moveFen);  
 
+                double currentMoveEval = evaluationResult.getEvaluation();
+                String nextBestMove = evaluationResult.getBestMove();
+                
+                double evalDiff = bestMoveEval - currentMoveEval;    // TODO: not used, seems we only need globalEvalDiff            
+                
+                // for BLACK this diff must be used with negative value (as lesser eval is better for black)
+                double currentMaxEvalDiff = color.equals(COLOR_WHITE) ? maxEvalDiff : -maxEvalDiff;
+                
+                // this is the diff with the stating positions' eval
+                double globalEvalDiff = startPositionEval - currentMoveEval;
+                
                 log.debug("accumulatedProbability: " + accumulatedProbability);
 
-                // if Probability of move is enough and we have "enough games", continue searching recursively
-                if (accumulatedProbability >= minProbabilityOfMove && totalGamesMove >= minGamesToExploreOpponentMove) {
+				// if Probability of move is enough and we have "enough games" and decent EVAL,
+				// continue searching recursively
+                if (accumulatedProbability >= minProbabilityOfMove 
+                		&& totalGamesMove >= minGamesToExploreOpponentMove 
+                		// && Precision.compareTo(evalDiff, currentMaxEvalDiff, Constants.EPSILON) < 0     // TODO: check if we should check for this diff, seems checking with globalEvalDiff is enough
+                		&& Precision.compareTo(globalEvalDiff, currentMaxEvalDiff, Constants.EPSILON) < 0) {
+                	
+                	log.debug("globalEvalDiff={} currentMaxEvalDiff={}", globalEvalDiff, currentMaxEvalDiff);
+                	
                     String newFen = generateNewFen(fen, move);
                     String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
                     log.debug("try move: " + move);
                     if (!isExtraDepthCall) {
                     	// we mark this as an "extra depth call" only if we are in remaining depth=1 
                     	// and we are doing and we are looking at a "good move"
-                    	averageRatingOpponents = searchBestMove(newFen, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
+                    	averageRatingOpponents = searchBestMove(newFen, nextBestMove, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
                     } else {
                     	log.debug("not doing call to search more moves, we are just getting the avgRatingForAllValidMoves (extra call)");
                     }
@@ -375,7 +448,7 @@ public class OpeningExplorerService {
                     String newFen = generateNewFen(fen, move);
                     String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
                     log.debug("try move (to get stats): " + move);
-                	averageRatingOpponents = searchBestMove(newFen, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
+                	averageRatingOpponents = searchBestMove(newFen, nextBestMove, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
                 	log.debug("back to FEN (got stats): "+ fen);
                 }
                 
@@ -545,6 +618,24 @@ public class OpeningExplorerService {
                 default: throw new IllegalArgumentException("Invalid promotion piece: " + promotionChar);
             }
         }
+    }
+ 
+    
+    private void requestEvaluationList(String fenCode, JsonArray jsonMoves) {
+        // Convert JsonArray to List<String>
+        List<String> moves = new ArrayList<>();
+        for (JsonElement moveElement : jsonMoves) {
+            moves.add(moveElement.getAsString());
+        }
+
+        chessEngineService.requestEvaluationList(fenCode, moves, evalDepth);
+    }
+    
+    @EventListener
+    public void handleEvaluationResult(EvaluationResultEvent event) {
+    	// TODO: not used now, using CompletableFuture for integrating with ChessEngineService
+        log.info("Received evaluation result: " + event.getEvaluation());
+        // Process the result
     }
     
 }

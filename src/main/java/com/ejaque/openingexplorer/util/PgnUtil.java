@@ -1,6 +1,15 @@
 package com.ejaque.openingexplorer.util;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+
+import com.ejaque.openingexplorer.config.Constants;
+import com.github.bhlangonijr.chesslib.Board;
+import com.github.bhlangonijr.chesslib.move.Move;
+import com.github.bhlangonijr.chesslib.move.MoveException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,7 +34,66 @@ public class PgnUtil {
 //
 //        return line;
 //    }
+	
+	/**
+	 * Gets "Short FEN" which is FEN Code without halfmove clock and move number
+	 * (last two digits).
+	 * 
+	 * @param fenCode
+	 * @return
+	 */
+	public static String getShortFenCode(String fenCode) {
+        // Split the FEN string into parts
+        String[] parts = fenCode.split(" ");
 
+        // Reconstruct the FEN without the last two parts (halfmove clock and move number)
+        // Joining the first 4 parts as they represent
+        // 1. Piece placement
+        // 2. Active color
+        // 3. Castling availability
+        // 4. En passant target square
+        if (parts.length >= 4) {
+            return String.join(" ", parts[0], parts[1], parts[2], parts[3]);
+        } else {
+        	log.error("Ignoring Error getting the Short FEN for FEN: {}", fenCode);
+            // Return the original string if it doesn't have all parts
+            return fenCode;        	
+        }
+	}
+
+	/** Gets resulting FEN from initial FEN and move done. */
+    public static String getFinalFen(String initialFen, String moveUci) throws MoveException {
+        // Create a new board and load the initial FEN
+        Board board = new Board();
+        board.loadFromFen(initialFen);
+
+        // Parse the move in UCI format
+        Move move = new Move(moveUci, board.getSideToMove());
+
+        // Apply the move to the board
+        board.doMove(move);
+
+        // Return the new FEN string
+        return board.getFen();
+    }
+    
+    
+    public static String getColorToPlay(String fen) {
+    	char uciColor = 'x';
+        String[] parts = fen.split(" ");
+        if (parts.length > 1) {
+            uciColor = parts[1].charAt(0);
+            
+            if (uciColor == 'w') {
+            	return Constants.COLOR_WHITE;
+            } else if (uciColor == 'b') {
+            	return Constants.COLOR_BLACK;
+            }
+        }
+        throw new IllegalArgumentException("Invalid FEN string (trying to get color to play): " + fen);
+    }    
+    
+    
     public static String removeNullMovesFromGame(String pgnLine) {
         StringBuilder result = new StringBuilder();
         int depth = 0;

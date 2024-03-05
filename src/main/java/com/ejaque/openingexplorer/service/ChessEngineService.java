@@ -40,6 +40,12 @@ public class ChessEngineService {
 
     private WebSocket webSocket;
 
+    
+    /**
+     * Short FEN code of the position currently under evaluation. See {@link PgnUtil#getShortFenCode(String)}.
+     */
+    private String shortFenCodeCurrEval; 
+    
 	/**
 	 * Flag used to mark the current eval as completed. You always have to wait for
 	 * this to be completed before requesting a new eval to the UCI engine.
@@ -169,8 +175,23 @@ public class ChessEngineService {
                 
                 String message = charMessage.toString();
                 
+                if (message.startsWith("bestmove ")) {
+
+                	log.debug("BESTMOVE received. Processing next eval...");
+                    evalCompletedFlag.complete(null); // Mark the current evaluation as completed (unblocks waiting threads)
+                    evalCompletedFlag = new CompletableFuture<>(); // Reset for the next evaluation
+                    
+                    EvaluationResult evalResult = EvaluationResult.builder()
+                    		.bestMove("xxxx")
+                    		.evaluation(1.0)
+                    		.build();
+                    
+					shortFenToEvaluationMap.get(shortFenCodeCurrEval).complete(null);
+                    //sendCommand("quit");
+                }
+                
                 // Check for 'bestmove' command to mark evaluation completion
-                if (message.startsWith("info depth")) {
+                if (false && message.startsWith("info depth")) {
                     evalCompletedFlag.complete(null); // Mark the current evaluation as completed (unblocks waiting threads)
                     evalCompletedFlag = new CompletableFuture<>(); // Reset for the next evaluation
                     //sendCommand("quit");
@@ -244,13 +265,21 @@ public class ChessEngineService {
         }    
     }
     
-    public void sendInitCommands(String fenCode) {
-    	log.debug("Sending INIT commands...");
+    public void sendInitCommands(String fenCode) {    	
+    	log.debug("Sending INIT commands. fenCode={}", fenCode);
+    	
+    	shortFenCodeCurrEval = PgnUtil.getShortFenCode(fenCode);
+    	
+    	log.debug("Set shortFenCodeCurrEval={}", shortFenCodeCurrEval);
+
+        // set the element in the eval result map
+        shortFenToEvaluationMap.put(shortFenCodeCurrEval, new CompletableFuture<EvaluationResult>());
+
         sendCommand("stop");
         sendCommand("setoption name MultiPV value 1");
         //sendCommand("position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         sendCommand("position fen " + fenCode);        
-        sendCommand("go infinite");
+        sendCommand("go depth 25");
         
         // Initialize evalCompletedFlag to a completed state
         // FIXME: evalCompletedFlag = CompletableFuture.completedFuture(null);
@@ -280,6 +309,7 @@ public class ChessEngineService {
 	 * @param depth   Max depth to go for the evaluation (in half moves).               
 	 */
     public void requestEvaluationList(String fenCode, List<String> moves, int depth) {
+    	log.debug("requestEvaluationList: depth={}, moves={}", depth, moves);
     	for (String move : moves) {
 			requestEvaluation(fenCode, move, depth);
 		}
@@ -293,13 +323,16 @@ public class ChessEngineService {
 	 *                like "e2e4", "g8f3", etc.
 	 * @param depth   Max depth to go for the evaluation (in half moves).               
 	 */
-	private void requestEvaluation(String fenCode, String move, int depth) {
+	public void requestEvaluation(String fenCode, String move, int depth) {
 		
 
     	log.debug("SYNCH before requesting new evaluation...");
 
+    	// we create local copy of this flag as this is "reset" with each evaluation
+    	CompletableFuture<Void> thisEvalCompletedFlag = evalCompletedFlag;
+    	
         // Queue the evaluation task to be run asynchronously after the current evaluation completes
-        evalCompletedFlag = evalCompletedFlag.thenRun(() -> {
+    	thisEvalCompletedFlag = thisEvalCompletedFlag.thenRun(() -> {
         	
         	log.debug("Requesting new evaluation...");
         	
@@ -326,9 +359,9 @@ public class ChessEngineService {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-
+            
             // Re-send any necessary initialization commands
-            sendInitCommands("rnbqkb1r/pppppppp/5n2/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 2 2");
+            sendInitCommands(fenCode);
         
         });
         
@@ -342,7 +375,9 @@ public class ChessEngineService {
 	 * @return The evaluation
 	 */
     public EvaluationResult getEvaluationResult(String fenCode) {
-        CompletableFuture<EvaluationResult> evaluationFuture = shortFenToEvaluationMap.computeIfAbsent(fenCode, k -> new CompletableFuture<>());
+    	log.debug("getEvaluationResult: fenCode={}", fenCode);
+    	String shortFenCode = PgnUtil.getShortFenCode(fenCode);
+        CompletableFuture<EvaluationResult> evaluationFuture = shortFenToEvaluationMap.computeIfAbsent(shortFenCode, k -> new CompletableFuture<>());
         return evaluationFuture.join(); // This will block until the future is completed
     }
     

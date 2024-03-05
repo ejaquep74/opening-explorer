@@ -26,7 +26,7 @@ public class ChessEngineServiceTest {
         // Initialization logic for ChessEngineService
     	chessEngineService.createChessEngineServer();
     	chessEngineService.startWSSConnection();
-    	chessEngineService.sendInitCommands("r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8");
+    	chessEngineService.sendInitCommands("rnbqkbnr/ppppppp1/7p/8/6P1/7P/PPPPPP2/RNBQKBNR b KQkq - 0 2");
     	
 //    	// DELETE, checking these commands for now...
 //    	chessEngineService.sendCommand("position fen r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8");
@@ -37,12 +37,11 @@ public class ChessEngineServiceTest {
     @Test
     public void testRequestEvaluationList() throws InterruptedException {
         String fenCode = "r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PPQBPPBP/RN1Q1RK1 w - - 8 8";
-        var moves = Arrays.asList("d1c2");  //, "d1b3"
+        var moves = Arrays.asList("d1c2", "d1b3"); 
         CountDownLatch latch = new CountDownLatch(1);
-
-        chessEngineService.requestEvaluationList(fenCode, moves, 25);
-
         
+        chessEngineService.requestEvaluationList(fenCode, moves, 0);
+
         EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(fenCode);
         
         log.debug("evaluationResult: {}", evaluationResult);

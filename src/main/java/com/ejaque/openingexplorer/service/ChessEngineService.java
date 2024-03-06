@@ -11,8 +11,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,11 +44,18 @@ public class ChessEngineService {
 
     private WebSocket webSocket;
 
+    private final Queue<Runnable> evaluationQueue = new ConcurrentLinkedQueue<>();
     
+    private ExecutorService evaluationExecutor = Executors.newSingleThreadExecutor();
+
     /**
      * Short FEN code of the position currently under evaluation. See {@link PgnUtil#getShortFenCode(String)}.
      */
     private String shortFenCodeCurrEval; 
+    
+    
+    private CompletableFuture<Void> bestMoveReceived = new CompletableFuture<>();
+    
     
 	/**
 	 * Flag used to mark the current eval as completed. You always have to wait for
@@ -70,7 +81,7 @@ public class ChessEngineService {
 	 * This is a map from a Short FEN to Evaluation. Short FEN is normal FEN without
 	 * las 2 numbers (halfmove clock and move number).
 	 */
-    private Map<String, CompletableFuture<EvaluationResult>> shortFenToEvaluationMap = new HashMap<>();
+    private Map<String, CompletableFuture<EvaluationResult>> shortFenToEvaluationMap = new ConcurrentHashMap<>();
 
 
     @Autowired
@@ -175,21 +186,30 @@ public class ChessEngineService {
                 
                 String message = charMessage.toString();
                 
-                if (message.startsWith("bestmove ")) {
-
-                	log.debug("BESTMOVE received. Processing next eval...");
-                    evalCompletedFlag.complete(null); // Mark the current evaluation as completed (unblocks waiting threads)
-                    evalCompletedFlag = new CompletableFuture<>(); // Reset for the next evaluation
+                if (message.startsWith("bestmove")) {
+                    log.debug("BESTMOVE received. Polling queue for next eval...");
                     
+                    // Extract best move from the message
+                    String[] parts = message.split(" ");
+                    String bestMove = parts.length > 1 ? parts[1] : "unknown";
+                    
+                    // mark current eval as completed
                     EvaluationResult evalResult = EvaluationResult.builder()
-                    		.bestMove("xxxx")
+                    		.bestMove(bestMove)
                     		.evaluation(1.0)
                     		.build();
                     
-					shortFenToEvaluationMap.get(shortFenCodeCurrEval).complete(null);
-                    //sendCommand("quit");
+                    log.debug("COMPLETING short FEN eval: " + shortFenCodeCurrEval);
+    				shortFenToEvaluationMap.get(shortFenCodeCurrEval).complete(evalResult);
+    				bestMoveReceived.complete(null);
+                    
+                    // Trigger next evaluation in the queue
+                    Runnable nextTask = evaluationQueue.poll();
+                    if (nextTask != null) {
+                        nextTask.run();
+                    }
                 }
-                
+				
                 // Check for 'bestmove' command to mark evaluation completion
                 if (false && message.startsWith("info depth")) {
                     evalCompletedFlag.complete(null); // Mark the current evaluation as completed (unblocks waiting threads)
@@ -300,6 +320,46 @@ public class ChessEngineService {
         });
     }
     
+    
+    public void startEvaluations() {
+
+        Runnable nextTask = evaluationQueue.poll();
+        if (nextTask != null) {
+            nextTask.run();
+        }
+        
+//    	evaluationExecutor.execute(() -> {
+//            try {
+//                while (true) {
+//                    Runnable nextTask = evaluationQueue.poll();
+//                    if (nextTask != null) {
+//                        nextTask.run();
+//                    } else {
+//                        // Sleep for a short duration to prevent busy waiting
+//                        Thread.sleep(100); // 100 milliseconds, adjust as needed
+//                    }
+//                }
+//            } catch (InterruptedException e) {
+//                Thread.currentThread().interrupt();
+//                log.error("Evaluation thread was interrupted", e);
+//            }
+//        });
+    }    
+    
+    
+    public void shutdownEvaluations() {
+    	// FIXME: end the connection to websocket here
+        evaluationExecutor.shutdown();
+        
+//        evaluationExecutor.shutdownNow();
+//        try {
+//            webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutting down").join();
+//        } catch (Exception e) {
+//            log.error("Error closing WebSocket connection", e);
+//        }
+    }
+
+    
 	/**
 	 * Request evaluating a list for moves in a position
 	 * 
@@ -326,23 +386,14 @@ public class ChessEngineService {
 	public void requestEvaluation(String fenCode, String move, int depth) {
 		
 
-    	log.debug("SYNCH before requesting new evaluation...");
-
-    	// we create local copy of this flag as this is "reset" with each evaluation
-    	CompletableFuture<Void> thisEvalCompletedFlag = evalCompletedFlag;
+    	log.debug("requestEvaluation(...)");
     	
-        // Queue the evaluation task to be run asynchronously after the current evaluation completes
-    	thisEvalCompletedFlag = thisEvalCompletedFlag.thenRun(() -> {
-        	
-        	log.debug("Requesting new evaluation...");
-        	
-        	try {
-				Thread.sleep(DELAY_NEW_EVAL);
-			} catch (InterruptedException e) {
-				log.error("Error when sleeping before requesting new eval.", e);;
-			}
-        	
-            String finalFen = PgnUtil.getFinalFen(fenCode, move);
+        // Create a task for evaluation
+        Runnable evalTask = () -> {
+
+            log.debug("Requesting new evaluation for move: {}", move);
+
+            String finalFenCode = PgnUtil.getFinalFen(fenCode, move);
             colorToPlay = PgnUtil.getColorToPlay(fenCode);
             
             // Close the current WebSocket connection
@@ -361,12 +412,22 @@ public class ChessEngineService {
 			}
             
             // Re-send any necessary initialization commands
-            sendInitCommands(fenCode);
-        
-        });
+            sendInitCommands(finalFenCode);
+        };
+
+        // Add task to queue
+        log.debug("adding evalTask to the queue: move={}", move);
+        evaluationQueue.add(evalTask);
+
+//        // If it's the only task in the queue, start it immediately
+//        if (evaluationQueue.size() == 1) {
+//            log.debug("running evalTask: move={}", move);
+//        	evalTask.run();
+//        }
         
 	}
 
+	
 	/**
 	 * Gets the evaluation for a position (FEN) in BLOCKING manner, the calling
 	 * thread blocks until the evaluation is ready.
@@ -374,10 +435,23 @@ public class ChessEngineService {
 	 * @param fenCode FEN for the position to evaluate
 	 * @return The evaluation
 	 */
-    public EvaluationResult getEvaluationResult(String fenCode) {
-    	log.debug("getEvaluationResult: fenCode={}", fenCode);
-    	String shortFenCode = PgnUtil.getShortFenCode(fenCode);
+    public EvaluationResult getEvaluationResult(String fenCode, String move) {
+    	
+        // Wait for the bestmove message to be received
+        bestMoveReceived.join();
+
+        // Reset the CompletableFuture for the next usage
+        bestMoveReceived = new CompletableFuture<>();
+        
+        
+    	// finalFenCode is the FEN after making the move, or the same FEN if move is NULL
+    	String finalFenCode = move != null? PgnUtil.getFinalFen(fenCode, move) : fenCode;
+    	
+    	String shortFenCode = PgnUtil.getShortFenCode(finalFenCode);
+    	log.debug("getEvaluationResult: shortFEN={}", shortFenCode);
         CompletableFuture<EvaluationResult> evaluationFuture = shortFenToEvaluationMap.computeIfAbsent(shortFenCode, k -> new CompletableFuture<>());
+        //CompletableFuture<EvaluationResult> evaluationFuture = shortFenToEvaluationMap.get(shortFenCode);
+
         return evaluationFuture.join(); // This will block until the future is completed
     }
     

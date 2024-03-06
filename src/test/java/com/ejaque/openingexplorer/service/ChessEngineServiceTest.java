@@ -25,8 +25,8 @@ public class ChessEngineServiceTest {
     public void init() throws Exception {
         // Initialization logic for ChessEngineService
     	chessEngineService.createChessEngineServer();
-    	chessEngineService.startWSSConnection();
-    	chessEngineService.sendInitCommands("rnbqkbnr/ppppppp1/7p/8/6P1/7P/PPPPPP2/RNBQKBNR b KQkq - 0 2");
+//    	chessEngineService.startWSSConnection();
+//    	chessEngineService.sendInitCommands("rnbqkbnr/ppppppp1/7p/8/6P1/7P/PPPPPP2/RNBQKBNR b KQkq - 0 2");
     	
 //    	// DELETE, checking these commands for now...
 //    	chessEngineService.sendCommand("position fen r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8");
@@ -36,15 +36,25 @@ public class ChessEngineServiceTest {
     
     @Test
     public void testRequestEvaluationList() throws InterruptedException {
-        String fenCode = "r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PPQBPPBP/RN1Q1RK1 w - - 8 8";
-        var moves = Arrays.asList("d1c2", "d1b3"); 
+        String fenCode = "rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4";
+        var moves = Arrays.asList("c4d5", "g1f3", "c1g5"); 
         CountDownLatch latch = new CountDownLatch(1);
         
-        chessEngineService.requestEvaluationList(fenCode, moves, 0);
-
-        EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(fenCode);
+        chessEngineService.requestEvaluationList(fenCode, moves, 25);
         
-        log.debug("evaluationResult: {}", evaluationResult);
+        chessEngineService.startEvaluations();
+
+        EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(fenCode, "c4d5");
+        log.debug("evaluationResult: {}", evaluationResult.getBestMove());
+        
+        //Thread.sleep(3000);
+        evaluationResult = chessEngineService.getEvaluationResult(fenCode, "g1f3");
+        log.debug("evaluationResult: {}", evaluationResult.getBestMove());
+        
+        //Thread.sleep(3000);
+        evaluationResult = chessEngineService.getEvaluationResult(fenCode, "c1g5");
+        log.debug("evaluationResult: {}", evaluationResult.getBestMove());
+        
         
         
         

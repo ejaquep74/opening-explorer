@@ -196,7 +196,7 @@ public class OpeningExplorerService {
     /** Starts the search for good moves. */
     public void startSearch() throws Exception {
         // BLOCKING call:
-        EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(startPositionFEN);  
+        EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(startPositionFEN, null);  
 
         startPositionEval = evaluationResult.getEvaluation();
         String nextBestMove = evaluationResult.getBestMove();
@@ -403,10 +403,8 @@ public class OpeningExplorerService {
 //                double bestMoveEval = bestMoveEvalResult.getEvaluation();
                 double bestMoveEval = 0.0;  // TODO: not used, check if really need evalDiff bellow...
                 
-                String moveFen = PgnUtil.getFinalFen(fen, move);
-                
                 // BLOCKING call (should block more often if engine is slower than opening exploring):
-                EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(moveFen);  
+                EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(fen, move);  
 
                 double currentMoveEval = evaluationResult.getEvaluation();
                 String nextBestMove = evaluationResult.getBestMove();

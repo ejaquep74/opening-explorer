@@ -5,33 +5,42 @@ lichess:
 
 # See javadocs in OpeningExplorerService class  
 throttling:
-  minTimeBetweenCalls: 1100
+  minTimeBetweenCalls: 1200
 
 # See javadocs in OpeningExplorerService class  (TODO: delete minRankForRatingAvg)  
 searchParams:
-  playerColor: white
-  startPositionFEN: rnbq1rk1/pp2ppbp/3p1np1/2p5/2PP4/2N2NP1/PP2PPBP/R1BQK2R w KQ - 0 7
+  playerColor: white	
+  startPositionFEN: r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8
   startPositionColor: white
   
-  # Suggested: 8 half moves (each 2 half moves it multiplies by 5 the time, comparing in the QGA 6 vs 8 moves)
-  maxDepthHalfMoves: 8    
+  # Suggested: 8 half moves (each 2 half moves it multiplies by 5 the time, comparing in the QGA 6 vs 8 moves, it's 3 vs 15 mins)
+  maxDepthHalfMoves: 6    
   
-  maxPopularityPctg: 0.1
-  minRankForRatingAvg: 3
-  minPercentileForRatingAvg: 70.0
-  minProbabilityOfMove: 0.05
+  maxEvalDiff: 0.4                  # RANAME to maxEvalDiffForViableMoves, used to decide weather to "search deeper" after this move
+  evalDepth: 20						# target depth for engine eval
+  maxPopularityPctg: 0.10
+  minRankForRatingAvg: 3    		# NOT USED
+  minPercentileForRatingAvg: 50.0   # with 70 5:30 mins,  with 50 6:00 mins (couple more positions to evaluate)
+  minProbabilityOfMove: 0.10
+  
+  #NEW PARAMS PROPOSED:
+  maxEvalDiffForGoodMoves: 0.2  # this eval diff should be more strict as it defines GOOD EVAL MOVES. Used as a condition to mark a move as GOOD
+  minPercentileForRatingAvgGoodMoves: 50.0   #this percentile should be more lenient, as it is working with moves marked as good eval
+  
+  # try "2200,2500" for more games, moves. This are the rating ranges (COMMA separated) available in lichess opening explorer's config
+  ratingRange: 2500
   
   # tried 50 when checking ratings 2200,2500
-  minGamesToExploreOpponentMove: 30
+  minGamesToExploreOpponentMove: 15
   
-  minGamesToChooseGoodMove: 10
+  minGamesToChooseGoodMove: 15
 
   # tried 50 when checking ratings 2200,2500
-  minGamesToChooseCandidateMove: 30
+  minGamesToChooseCandidateMove: 15
   
 output:
   file:
-    path: "C:/Users/eajaquep/Documents/marrujo-qga-pos0-r2500-8hm.xlsx"
+    path: "C:/Users/eajaquep/Documents/antu-cat4-Ab4-EVAL-good50.xlsx"
     # "//wsl.localhost/Ubuntu/home/eajaquep/Documents/good-moves5.xlsx"
     
     

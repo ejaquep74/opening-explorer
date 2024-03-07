@@ -51,6 +51,7 @@ public class GoodMove {
 
 	private String fen;
 	private String move;
+	private double evaluation;
 	private double probabilityOcurring;
 	private double rawProbability;	
 	private int ratingRank;

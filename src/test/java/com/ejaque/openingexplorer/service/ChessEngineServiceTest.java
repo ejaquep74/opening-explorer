@@ -1,9 +1,8 @@
 package com.ejaque.openingexplorer.service;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,24 +35,33 @@ public class ChessEngineServiceTest {
     
     @Test
     public void testRequestEvaluationList() throws InterruptedException {
-        String fenCode = "rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4";
-        var moves = Arrays.asList("c4d5", "g1f3", "c1g5"); 
+        
+    	String fenCode = "rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4";
+    	EvaluationResult evaluationResult = null;
+    	List<String> moves = null;
+    	
+//    	moves = Arrays.asList("c4c5");
+//    	chessEngineService.requestEvaluationList(fenCode, moves, 25);
+//        evaluationResult = chessEngineService.getEvaluationResult(fenCode, "c4c5");
+//        log.debug("evaluationResult: {} {}", evaluationResult.getEvaluation(), evaluationResult.getBestMove());
+    	
+        moves = Arrays.asList("c4d5", "g1f3", "c1g5"); 
         CountDownLatch latch = new CountDownLatch(1);
         
         chessEngineService.requestEvaluationList(fenCode, moves, 25);
         
         chessEngineService.startEvaluations();
 
-        EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(fenCode, "c4d5");
-        log.debug("evaluationResult: {}", evaluationResult.getBestMove());
+        evaluationResult = chessEngineService.getEvaluationResult(fenCode, "c4d5");
+        log.debug("evaluationResult: {} {}", evaluationResult.getEvaluation(), evaluationResult.getBestMove());
         
         //Thread.sleep(3000);
         evaluationResult = chessEngineService.getEvaluationResult(fenCode, "g1f3");
-        log.debug("evaluationResult: {}", evaluationResult.getBestMove());
+        log.debug("evaluationResult: {} {}", evaluationResult.getEvaluation(), evaluationResult.getBestMove());
         
         //Thread.sleep(3000);
         evaluationResult = chessEngineService.getEvaluationResult(fenCode, "c1g5");
-        log.debug("evaluationResult: {}", evaluationResult.getBestMove());
+        log.debug("evaluationResult: {} {}", evaluationResult.getEvaluation(), evaluationResult.getBestMove());
         
         
         

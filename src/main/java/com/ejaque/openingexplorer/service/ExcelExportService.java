@@ -51,7 +51,7 @@ public class ExcelExportService {
                             "Rating Percentile", "Average Rating For All Moves", 
                             "Average Rating", "Average Rating Opponents", 
                             "White Points Pct", "Games Position", "Games Move", 
-                            "Popularity%", "Ratio"};
+                            "Popularity%", "Ratio", "Eval"};
 
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
@@ -108,5 +108,8 @@ public class ExcelExportService {
         } else {
             cell.setCellValue("N/A"); // Or some other placeholder if division by zero
         }
+        
+        cell = row.createCell(13);
+        cell.setCellValue(move.getEvaluation());
     }
 }

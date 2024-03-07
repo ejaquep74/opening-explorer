@@ -195,7 +195,15 @@ public class OpeningExplorerService {
 
     /** Starts the search for good moves. */
     public void startSearch() throws Exception {
-        // BLOCKING call:
+    	
+    	chessEngineService.createChessEngineServer();
+    	
+    	chessEngineService.requestEvaluation(startPositionFEN, null, evalDepth);
+    	
+    	chessEngineService.startEvaluations();
+    	
+    	
+    	// this call BLOCKS until result is ready:
         EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(startPositionFEN, null);  
 
         startPositionEval = evaluationResult.getEvaluation();
@@ -241,6 +249,13 @@ public class OpeningExplorerService {
         return avgRatingForAllMoves;
     }
 
+	
+	double getEval(String fenCode, String move) {
+		chessEngineService.requestEvaluation(fenCode, move, evalDepth);
+		chessEngineService.startEvaluations();
+		return chessEngineService.getEvaluationResult(fenCode, move).getEvaluation();
+	}
+	
     /**
      * 
      * @param fen
@@ -346,6 +361,10 @@ public class OpeningExplorerService {
             	double ratingPercentile = 0.0;
             	double averageRatingOpponents = 0.0;
             	
+                Double localEval = null;
+                boolean skipEvalCheck = true;
+
+            	
                 JsonObject moveObject = movesArray.get(i).getAsJsonObject();
                 String move = moveObject.get("uci").getAsString();
                 
@@ -388,11 +407,14 @@ public class OpeningExplorerService {
                 	// and that it has a "minimum of games" played
                     if (ratingPercentile  >= minPercentileForRatingAvg && totalGamesMove >= minGamesToChooseGoodMove) {
                     	isGoodMove = true;
-                    	log.debug("*** GOOD MOVE: " + move);
+                    	localEval = getEval(fen, move);
+                    	log.debug("*** GOOD MOVE: move={} eval={}", move, localEval);
                     	log.debug("popularity pctg: " + popularityPctg);                    	
                     	log.debug("avg rating rank: " + averageRatingRanks.get(i));
                     }
 
+                    
+                    
                 }
                 
 //                String engineBestMoveFen = PgnUtil.getFinalFen(fen, engineBestMove);
@@ -404,49 +426,65 @@ public class OpeningExplorerService {
                 double bestMoveEval = 0.0;  // TODO: not used, check if really need evalDiff bellow...
                 
                 // BLOCKING call (should block more often if engine is slower than opening exploring):
-                EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(fen, move);  
+                //EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(fen, move);  // TODO: check if we need the full object or just the eval as now (best move not used)
 
-                double currentMoveEval = evaluationResult.getEvaluation();
-                String nextBestMove = evaluationResult.getBestMove();
+                //double currentMoveEval = evaluationResult.getEvaluation();
+                //String nextBestMove = evaluationResult.getBestMove();
                 
-                double evalDiff = bestMoveEval - currentMoveEval;    // TODO: not used, seems we only need globalEvalDiff            
+                //double evalDiff = bestMoveEval - currentMoveEval;    // TODO: not used, seems we only need globalEvalDiff            
                 
                 // for BLACK this diff must be used with negative value (as lesser eval is better for black)
                 double currentMaxEvalDiff = color.equals(COLOR_WHITE) ? maxEvalDiff : -maxEvalDiff;
                 
-                // this is the diff with the stating positions' eval
-                double globalEvalDiff = startPositionEval - currentMoveEval;
+                // this is the diff with the starting positions' eval
+                //double globalEvalDiff = startPositionEval - currentMoveEval;
                 
                 log.debug("accumulatedProbability: " + accumulatedProbability);
-
+                
 				// if Probability of move is enough and we have "enough games" and decent EVAL,
 				// continue searching recursively
                 if (accumulatedProbability >= minProbabilityOfMove 
                 		&& totalGamesMove >= minGamesToExploreOpponentMove 
                 		// && Precision.compareTo(evalDiff, currentMaxEvalDiff, Constants.EPSILON) < 0     // TODO: check if we should check for this diff, seems checking with globalEvalDiff is enough
-                		&& Precision.compareTo(globalEvalDiff, currentMaxEvalDiff, Constants.EPSILON) < 0) {
+                	) {
                 	
-                	log.debug("globalEvalDiff={} currentMaxEvalDiff={}", globalEvalDiff, currentMaxEvalDiff);
+                	// if color is for our player, dont skip the eval check (we want to consider eval for searching deeper)
+                	if (color.equals(startPositionColor)) {
+                		//skipEvalCheck = false;  //FIXME: disabled for now
+                	}
+
+                	// if we dont skip evaluation and we havent done it yet, we do it... 
+                	if (!skipEvalCheck && localEval == null) {
+                		localEval = getEval(fen, move);
+                	}
                 	
-                    String newFen = generateNewFen(fen, move);
-                    String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
-                    log.debug("try move: " + move);
-                    if (!isExtraDepthCall) {
-                    	// we mark this as an "extra depth call" only if we are in remaining depth=1 
-                    	// and we are doing and we are looking at a "good move"
-                    	averageRatingOpponents = searchBestMove(newFen, nextBestMove, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
-                    } else {
-                    	log.debug("not doing call to search more moves, we are just getting the avgRatingForAllValidMoves (extra call)");
-                    }
-                    log.debug("back to FEN: "+ fen);
-                
+                	if (skipEvalCheck || Precision.compareTo(startPositionEval - localEval, currentMaxEvalDiff, Constants.EPSILON) < 0) {
+                		log.debug("EXPLORING MOVE: color={} move={} localEval={} startPositionalEval={}", color, move, localEval, startPositionEval);
+                		log.debug("currentMaxEvalDiff={}", currentMaxEvalDiff);
+	                	
+	                    String newFen = generateNewFen(fen, move);
+	                    String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
+	                    log.debug("try move: " + move);
+	                    if (!isExtraDepthCall) {
+	                    	// we mark this as an "extra depth call" only if we are in remaining depth=1 
+	                    	// and we are doing and we are looking at a "good move"
+	                    	averageRatingOpponents = searchBestMove(newFen, null, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
+	                    } else {
+	                    	log.debug("not doing call to search more moves, we are just getting the avgRatingForAllValidMoves (extra call)");
+	                    }
+	                    log.debug("back to FEN: "+ fen);
+                	
+                	} else {
+                		log.debug("DISCARDING MOVE: color={} move={} localEval={} startPositionalEval={}", color, move, localEval, startPositionEval);
+                	}
+	                    
                 // if we dont comply with criteria to search deeper but we HAVE to do 
                 // an "extra depth call" (for Good Move stats)...
                 } else if (isGoodMove) {
                     String newFen = generateNewFen(fen, move);
                     String opponentColor = (color.equals(COLOR_WHITE)) ? COLOR_BLACK : COLOR_WHITE;
                     log.debug("try move (to get stats): " + move);
-                	averageRatingOpponents = searchBestMove(newFen, nextBestMove, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
+                	averageRatingOpponents = searchBestMove(newFen, null, opponentColor, remainingDepth - 1, accumulatedProbability, remainingDepth == 1 && isGoodMove);
                 	log.debug("back to FEN (got stats): "+ fen);
                 }
                 
@@ -456,6 +494,7 @@ public class OpeningExplorerService {
                     		GoodMove.builder()
                     		.move(move)
                     		.totalGames(totalGames)
+                    		.evaluation(localEval)
                     		.whitePointsPctg(whitePointsPctg)
                     		.averageRating(averageRatings.get(i))
                     		.averageRatingForAllMoves(avgRatingForAllMoves)

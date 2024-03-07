@@ -61,9 +61,23 @@ public class PgnUtil {
         }
 	}
 
-	/** Gets resulting FEN from initial FEN and move done. */
+	/**
+	 * Gets resulting FEN from initial FEN and move done.
+	 * 
+	 * @param initialFen FEN for initial position
+	 * @param moveUci    Move to be made. If NULL, this method just return the
+	 *                   initial position
+	 * @return
+	 * @throws MoveException
+	 */
     public static String getFinalFen(String initialFen, String moveUci) throws MoveException {
-        // Create a new board and load the initial FEN
+        
+    	// if there's no move, we return FEN for original position
+    	if (moveUci == null) {
+    		return initialFen;
+    	}
+    	
+    	// Create a new board and load the initial FEN
         Board board = new Board();
         board.loadFromFen(initialFen);
 

@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import com.ejaque.openingexplorer.config.Constants;
 import com.ejaque.openingexplorer.model.EvaluationResult;
 import com.ejaque.openingexplorer.util.PgnUtil;
+import com.ejaque.openingexplorer.util.UciUtil;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -49,9 +50,18 @@ public class ChessEngineService {
     private ExecutorService evaluationExecutor = Executors.newSingleThreadExecutor();
 
     /**
+     * FEN code of the position currently under evaluation. See {@link PgnUtil#getShortFenCode(String)}.
+     */
+    private String fenCodeCurrEval;
+
+    /**
      * Short FEN code of the position currently under evaluation. See {@link PgnUtil#getShortFenCode(String)}.
      */
-    private String shortFenCodeCurrEval; 
+    private String shortFenCodeCurrEval;
+    
+    
+    /** Current evaluation for the position. */
+    private double currEval;  // TODO: consider using a map  depth -> eval, for a richer analysis of eval evolution
     
     
     private CompletableFuture<Void> bestMoveReceived = new CompletableFuture<>();
@@ -64,16 +74,6 @@ public class ChessEngineService {
     private CompletableFuture<Void> evalCompletedFlag = new CompletableFuture<Void>();
 
     
-	/**
-	 * Pattern to extract relevant information from the UCI "info" message. Example
-	 * message: <br>
-	 * info depth 22 seldepth 38 multipv 1 score cp 28 nodes 70508105 nps 15948451
-	 * hashfull 47 tbhits 0 time 4421 pv d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c4d5 e6d5
-	 * c1g5 c7c6 e2e3 h7h6
-	 */
-    private static final Pattern INFO_PATTERN = Pattern.compile(   // FIXME: it has hardcoded depth 25
-        "info .* depth 25 .* (cp (-?\\d+)|mate (-?\\d+)) .*");
-
     /** Delay used before rquesting new eval to engine, might be useful to avoid requesting before the engine has completed previous eval. */
 	private static final long DELAY_NEW_EVAL = 500;
     
@@ -186,20 +186,22 @@ public class ChessEngineService {
                 
                 String message = charMessage.toString();
                 
+                if (message.startsWith("info") && message.contains("score cp")) {
+                	currEval = UciUtil.getEval(fenCodeCurrEval, message);
+                }
+                
                 if (message.startsWith("bestmove")) {
                     log.debug("BESTMOVE received. Polling queue for next eval...");
                     
-                    // Extract best move from the message
-                    String[] parts = message.split(" ");
-                    String bestMove = parts.length > 1 ? parts[1] : "unknown";
+                    String bestMove = UciUtil.getBestMove(message);
                     
                     // mark current eval as completed
                     EvaluationResult evalResult = EvaluationResult.builder()
                     		.bestMove(bestMove)
-                    		.evaluation(1.0)
+                    		.evaluation(currEval)
                     		.build();
                     
-                    log.debug("COMPLETING short FEN eval: " + shortFenCodeCurrEval);
+                    log.debug("COMPLETING FEN eval: " + fenCodeCurrEval);
     				shortFenToEvaluationMap.get(shortFenCodeCurrEval).complete(evalResult);
     				bestMoveReceived.complete(null);
                     
@@ -232,7 +234,7 @@ public class ChessEngineService {
 					}
 
                     // Re-send any necessary initialization commands
-                    sendInitCommands("rnbqkbnr/1ppppppp/p7/8/1P6/P7/2PPPPPP/RNBQKBNR b KQkq - 0 2");
+                    sendInitCommands("rnbqkbnr/1ppppppp/p7/8/1P6/P7/2PPPPPP/RNBQKBNR b KQkq - 0 2", 25); // FIXME: hardcoded, but is unused code now
                    
                     
 //                    sendCommand("stop");
@@ -252,24 +254,6 @@ public class ChessEngineService {
                     return null;
                 }
                 
-                Matcher matcher = INFO_PATTERN.matcher(message);
-                if (matcher.find()) {
-                    if (matcher.group(1).startsWith("cp")) {  // even if it is lowerbound or upperbound
-                        // Convert centipawn score to double
-                        double score = Integer.parseInt(matcher.group(2)) / 100.0;
-                        log.debug("Converted cp score: " + score);
-                    } else if (matcher.group(1).startsWith("mate")) {
-                    	
-                    	// if negative means mate for black
-                    	int mateMoves = Integer.parseInt(matcher.group(3));
-                    	
-                        // Convert mate score
-                        double score = mateMoves > 0.0 ? 100.00 : -100.00;
-                        log.debug("Mate detected. Score: " + score);
-                    }
-                }
-                
-                
                 webSocket.request(1); // Requesting next message
                 return null;
             }
@@ -285,9 +269,10 @@ public class ChessEngineService {
         }    
     }
     
-    public void sendInitCommands(String fenCode) {    	
+    public void sendInitCommands(String fenCode, int depth) {    	
     	log.debug("Sending INIT commands. fenCode={}", fenCode);
     	
+    	fenCodeCurrEval = fenCode;
     	shortFenCodeCurrEval = PgnUtil.getShortFenCode(fenCode);
     	
     	log.debug("Set shortFenCodeCurrEval={}", shortFenCodeCurrEval);
@@ -299,7 +284,7 @@ public class ChessEngineService {
         sendCommand("setoption name MultiPV value 1");
         //sendCommand("position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         sendCommand("position fen " + fenCode);        
-        sendCommand("go depth 25");
+        sendCommand("go depth " + depth);
         
         // Initialize evalCompletedFlag to a completed state
         // FIXME: evalCompletedFlag = CompletableFuture.completedFuture(null);
@@ -379,8 +364,8 @@ public class ChessEngineService {
 	 * Request evaluating a single move in a position.
 	 * 
 	 * @param fenCode Base position
-	 * @param moves   Moves made from the base position (fenCode), in UCI format
-	 *                like "e2e4", "g8f3", etc.
+	 * @param move    Move made from the base position (fenCode), in UCI format
+	 *                like "e2e4", "g8f3", etc. If null, the base position is evaluated. 
 	 * @param depth   Max depth to go for the evaluation (in half moves).               
 	 */
 	public void requestEvaluation(String fenCode, String move, int depth) {
@@ -412,7 +397,7 @@ public class ChessEngineService {
 			}
             
             // Re-send any necessary initialization commands
-            sendInitCommands(finalFenCode);
+            sendInitCommands(finalFenCode, depth);
         };
 
         // Add task to queue
@@ -437,6 +422,8 @@ public class ChessEngineService {
 	 */
     public EvaluationResult getEvaluationResult(String fenCode, String move) {
     	
+    	log.debug("getEvaluationResult: move={} fenCode={}", move, fenCode);
+    	
         // Wait for the bestmove message to be received
         bestMoveReceived.join();
 
@@ -452,7 +439,10 @@ public class ChessEngineService {
         CompletableFuture<EvaluationResult> evaluationFuture = shortFenToEvaluationMap.computeIfAbsent(shortFenCode, k -> new CompletableFuture<>());
         //CompletableFuture<EvaluationResult> evaluationFuture = shortFenToEvaluationMap.get(shortFenCode);
 
-        return evaluationFuture.join(); // This will block until the future is completed
+        EvaluationResult result = evaluationFuture.join(); // This will BLOCK until the future is completed
+        log.debug("Evaluation completed for bestMove={}: eval={}", result.getBestMove(), result.getEvaluation());
+        
+        return result;
     }
     
     public static void main(String[] args) throws Exception {
@@ -462,7 +452,7 @@ public class ChessEngineService {
         client.startWSSConnection();
         //client.sendInitCommands("rnbqkbnr/ppppppp1/7p/8/6P1/7P/PPPPPP2/RNBQKBNR b KQkq - 0 2");
         
-        client.sendInitCommands("r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8");
+        client.sendInitCommands("r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8", 25);
         
         //client.sendCommand("position fen r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8");
         //client.sendCommand("go depth 25");

@@ -282,8 +282,14 @@ public class OpeningExplorerService {
 			throws UnsupportedEncodingException, InterruptedException, IOException, ClientProtocolException, Exception {
 		
 		String encodedFen = URLEncoder.encode(fen, "UTF-8");
-        
-        String apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=" + ratingRange + "&fen=" + encodedFen;
+		
+		String apiUrl = null;
+		
+		if (ratingRange.trim().endsWith("masters")) {
+			apiUrl = "https://explorer.lichess.ovh/masters?fen=" + encodedFen;
+		} else {
+			apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=" + ratingRange + "&fen=" + encodedFen;
+		}
 
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         credentialsProvider.setCredentials(

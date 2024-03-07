@@ -9,6 +9,15 @@ OK vs PEND stuff:
 
 OK: change the output, so it will be an XSLX file with the list of moves and stats
 
+
+PEND: run chessify in another thread, for evaluation of the good moves, meanwhile the main thread continues exmploring games.
+
+PEND: mark each good move as present or not in chessable, including link with FEN if present
+
+PEND: if any line at any depth comes with sacrifices from chessify, save it, for later analysis by the user
+
+PEND: register sudden changes in evals for a move, might indicate sacrifices or high complexity
+
 PEND: use avg eval for opponent move. For example if 50% is 0.3, 30% -0.8 and 20% is -1.5, the average is 0.5*0.3 - 0.3*0.8 - 0.2*1.5 = -0.39.  For move evals under -3.00 consider eval = -3.00 (big blunders should not have more weight than needed). Also consider a minimum 90% of the games (one you have calculated the average for N moves and total games > 90%, we are done)  
 
 PEND: use chessable tree to check those moves for frequency and engine eval, so we can discover good moves, that are playable and have some human analysis in there. We can even check that analysis to see if after a +0.3 move, the best responses after 6-8 half moves lead to -0.4, so what happend there? maybe is was not an anylisis done deep enough at chessable, maybe we can use that to our advantage maybe it shows the move complexity. Also we can see if the lines analyzed, by playing decent eval moves, have some sacrifices, which makes them more interesting. 

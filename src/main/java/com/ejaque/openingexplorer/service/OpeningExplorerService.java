@@ -147,6 +147,9 @@ public class OpeningExplorerService {
     @Value("${searchParams.playerColor}")    
     private String playerColor;
 
+    @Value("${searchParams.minRatingRatio}")    
+    private double minRatingRatio;   
+    
     @Value("${searchParams.minGamesToChooseGoodMove}")    
     private int minGamesToChooseGoodMove;   
 
@@ -403,9 +406,16 @@ public class OpeningExplorerService {
                 	
                 	ratingPercentile = (1 - ((double) (averageRatingRanks.get(i) - 1) / averageRatingRanks.size())) * 100.0;
                 	
+                	double ratingRatio = averageRatings.get(i) / avgRatingForAllMoves;
+                	
                     // Check if it's one of the top moves in terms of rating average
                 	// and that it has a "minimum of games" played
-                    if (ratingPercentile  >= minPercentileForRatingAvg && totalGamesMove >= minGamesToChooseGoodMove) {
+                    if ( 	// ratingRatio > minRatingRatio (below) 
+                    		Precision.compareTo(ratingRatio, minRatingRatio, Constants.EPSILON) > 0
+                    		&& totalGamesMove >= minGamesToChooseGoodMove) {
+                    	
+                    	// TODO: check if could use ratingPercentile  >= minPercentileForRatingAvg  like we did in the past
+                    	
                     	isGoodMove = true;
                     	localEval = getEval(fen, move);
                     	log.debug("*** GOOD MOVE: move={} eval={}", move, localEval);

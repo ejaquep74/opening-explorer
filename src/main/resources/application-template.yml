@@ -19,8 +19,9 @@ searchParams:
   maxEvalDiff: 0.4                  # RANAME to maxEvalDiffForViableMoves, used to decide weather to "search deeper" after this move
   evalDepth: 20						# target depth for engine eval
   maxPopularityPctg: 0.10
+  minRatingRatio: 1.0               # 1.0 means the rating is on the avg, 1.01 means 1% over avg, 0.99 means 1% under avg
   minRankForRatingAvg: 3    		# NOT USED
-  minPercentileForRatingAvg: 50.0   # with 70 5:30 mins,  with 50 6:00 mins (couple more positions to evaluate)
+  minPercentileForRatingAvg: 50.0   # NOT USED: with 70 5:30 mins,  with 50 6:00 mins (couple more positions to evaluate)
   minProbabilityOfMove: 0.10
   
   #NEW PARAMS PROPOSED:
@@ -31,16 +32,16 @@ searchParams:
   ratingRange: 2500
   
   # tried 50 when checking ratings 2200,2500
-  minGamesToExploreOpponentMove: 15
+  minGamesToExploreOpponentMove: 10
   
-  minGamesToChooseGoodMove: 15
+  minGamesToChooseGoodMove: 10
 
   # tried 50 when checking ratings 2200,2500
-  minGamesToChooseCandidateMove: 15
+  minGamesToChooseCandidateMove: 10
   
 output:
   file:
-    path: "C:/Users/eajaquep/Documents/antu-cat4-Ab4-EVAL-good50.xlsx"
+    path: "C:/Users/eajaquep/Documents/antu-cat4-Ab4-EVAL-good-ratio.xlsx"
     # "//wsl.localhost/Ubuntu/home/eajaquep/Documents/good-moves5.xlsx"
     
     

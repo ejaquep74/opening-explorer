@@ -135,7 +135,6 @@ public class OpeningExplorerService {
 	 */
     private double startPositionEval;
 
-    @Value("${searchParams.startPositionColor}")
 	private String startPositionColor;
     
     @Value("${searchParams.maxPopularityPctg}")
@@ -144,7 +143,6 @@ public class OpeningExplorerService {
     @Value("${searchParams.minRankForRatingAvg}")    
 	private Integer minRankForRatingAvg;
 
-    @Value("${searchParams.playerColor}")    
     private String playerColor;
 
     @Value("${searchParams.minRatingRatio}")    
@@ -193,18 +191,17 @@ public class OpeningExplorerService {
     
     @Value("${searchParams.ratingRange}")    
 	private String ratingRange;
+	private int totalErrorsExploringMoves;
     
     
 
     /** Starts the search for good moves. */
     public void startSearch() throws Exception {
-    	
+
+    	// start the chess engine service for evaluations
     	chessEngineService.createChessEngineServer();
-    	
     	chessEngineService.requestEvaluation(startPositionFEN, null, evalDepth);
-    	
     	chessEngineService.startEvaluations();
-    	
     	
     	// this call BLOCKS until result is ready:
         EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(startPositionFEN, null);  
@@ -212,6 +209,11 @@ public class OpeningExplorerService {
         startPositionEval = evaluationResult.getEvaluation();
         String nextBestMove = evaluationResult.getBestMove();
 
+        // define player's color
+        playerColor = PgnUtil.getColorToPlay(startPositionFEN);
+        startPositionColor = playerColor;
+        
+        // start exploring moves
     	searchBestMove(startPositionFEN, nextBestMove, startPositionColor, maxDepthHalfMoves, 1.0, false);
     }
     
@@ -288,7 +290,7 @@ public class OpeningExplorerService {
 		if (ratingRange.trim().endsWith("masters")) {
 			apiUrl = "https://explorer.lichess.ovh/masters?fen=" + encodedFen;
 		} else {
-			apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=" + ratingRange + "&fen=" + encodedFen;
+			apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,claxxical&ratings=" + ratingRange + "&fen=" + encodedFen;
 		}
 
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
@@ -532,6 +534,7 @@ public class OpeningExplorerService {
             } // end FOR candidate moves
         
         } else {
+        	totalErrorsExploringMoves++;
         	log.error("ERROR IN RESPONSE...");
         	log.error("response: " + response);
         }
@@ -577,7 +580,13 @@ public class OpeningExplorerService {
 		}
 
         log.info("EXPORTING all good moves to EXCEL file.");
-        excelExportService.generateExcel(bestMoves);        
+        excelExportService.generateExcel(bestMoves);
+        
+        if (totalErrorsExploringMoves == 0) {
+        	System.out.println("FINISHED OK (no errors)");
+        } else {
+        	System.out.println("FINISHED WITH ERRORS!!! (total=" + totalErrorsExploringMoves + ")");
+        }
     }
     
     /**

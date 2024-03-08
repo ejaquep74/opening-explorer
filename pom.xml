@@ -89,11 +89,22 @@
 
 	<build>
 		<plugins>
+			<!-- REPACKAGE: to generate an executable fat JAR for whole app with "mvn clean package" -->
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
+
 		</plugins>
+		
+		
 	</build>
 
 </project>

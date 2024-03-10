@@ -213,6 +213,9 @@ public class OpeningExplorerService {
         playerColor = PgnUtil.getColorToPlay(startPositionFEN);
         startPositionColor = playerColor;
         
+        log.info("playerColor={}", playerColor);
+        log.info("startPositionColor={}", startPositionColor);
+        
         // start exploring moves
     	searchBestMove(startPositionFEN, nextBestMove, startPositionColor, maxDepthHalfMoves, 1.0, false);
     }
@@ -290,7 +293,7 @@ public class OpeningExplorerService {
 		if (ratingRange.trim().endsWith("masters")) {
 			apiUrl = "https://explorer.lichess.ovh/masters?fen=" + encodedFen;
 		} else {
-			apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,claxxical&ratings=" + ratingRange + "&fen=" + encodedFen;
+			apiUrl = "https://explorer.lichess.ovh/lichess?speeds=blitz,rapid,classical&ratings=" + ratingRange + "&fen=" + encodedFen;
 		}
 
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();

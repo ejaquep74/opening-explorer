@@ -9,15 +9,13 @@ throttling:
 
 # See javadocs in OpeningExplorerService class  (TODO: delete minRankForRatingAvg)  
 searchParams:
-  playerColor: white	
-  startPositionFEN: r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PP1BPPBP/RN1Q1RK1 w - - 8 8
-  startPositionColor: white
+  startPositionFEN: rnbqkb1r/1p3ppp/p1p1pn2/3p4/2PP4/1PN1PN2/P4PPP/R1BQKB1R b KQkq - 0 6
   
   # Suggested: 8 half moves (each 2 half moves it multiplies by 5 the time, comparing in the QGA 6 vs 8 moves, it's 3 vs 15 mins)
   maxDepthHalfMoves: 6    
   
   maxEvalDiff: 0.4                  # RANAME to maxEvalDiffForViableMoves, used to decide weather to "search deeper" after this move
-  evalDepth: 20						# target depth for engine eval
+  evalDepth: 22						# target depth for engine eval
   maxPopularityPctg: 0.10
   minRatingRatio: 1.0               # 1.0 means the rating is on the avg, 1.01 means 1% over avg, 0.99 means 1% under avg
   minRankForRatingAvg: 3    		# NOT USED
@@ -29,7 +27,8 @@ searchParams:
   minPercentileForRatingAvgGoodMoves: 50.0   #this percentile should be more lenient, as it is working with moves marked as good eval
   
   # try "2200,2500" for more games, moves. This are the rating ranges (COMMA separated) available in lichess opening explorer's config
-  ratingRange: 2500
+  # Use "masters" for official masters games (tournament play)
+  ratingRange: masters
   
   # tried 50 when checking ratings 2200,2500
   minGamesToExploreOpponentMove: 10
@@ -41,7 +40,7 @@ searchParams:
   
 output:
   file:
-    path: "C:/Users/eajaquep/Documents/antu-cat4-Ab4-EVAL-good-ratio.xlsx"
+    path: "C:/Users/eajaquep/Documents/castro-meran1-masters.xlsx"
     # "//wsl.localhost/Ubuntu/home/eajaquep/Documents/good-moves5.xlsx"
     
     

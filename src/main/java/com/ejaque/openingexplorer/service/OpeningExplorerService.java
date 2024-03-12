@@ -133,8 +133,8 @@ public class OpeningExplorerService {
 	 * Engine eval for starting position, it is very important as it is used as
 	 * reference for avoiding "bad moves" when searching.
 	 */
-    private double startPositionEval;
-
+    private double startPositionEval = 0.0;
+ 
 	private String startPositionColor;
     
     @Value("${searchParams.maxPopularityPctg}")
@@ -171,7 +171,7 @@ public class OpeningExplorerService {
     @Value("${searchParams.maxEvalDiff}")    
     private double maxEvalDiff;  // TODO: review if we should split this in two params (see NOTE above)
 
-    /** Target depth for engine eval. */
+    /** Target depth for engine eval. Set to 0 ti DISABLE engine usage.*/
     @Value("${searchParams.evalDepth}")    
 	private int evalDepth;    
     
@@ -198,16 +198,22 @@ public class OpeningExplorerService {
     /** Starts the search for good moves. */
     public void startSearch() throws Exception {
 
-    	// start the chess engine service for evaluations
-    	chessEngineService.createChessEngineServer();
-    	chessEngineService.requestEvaluation(startPositionFEN, null, evalDepth);
-    	chessEngineService.startEvaluations();
+    	EvaluationResult evaluationResult = null;
+    	String nextBestMove = null;
     	
-    	// this call BLOCKS until result is ready:
-        EvaluationResult evaluationResult = chessEngineService.getEvaluationResult(startPositionFEN, null);  
+    	// start the chess engine service for evaluations
+    	if (evalDepth > 0) {
+	    	chessEngineService.createChessEngineServer();
+	    	chessEngineService.requestEvaluation(startPositionFEN, null, evalDepth);
+	    	chessEngineService.startEvaluations();
 
-        startPositionEval = evaluationResult.getEvaluation();
-        String nextBestMove = evaluationResult.getBestMove();
+	    	// this call BLOCKS until result is ready:
+	        evaluationResult = chessEngineService.getEvaluationResult(startPositionFEN, null);  
+
+	        startPositionEval = evaluationResult.getEvaluation();
+	        nextBestMove = evaluationResult.getBestMove();
+    	}
+    	
 
         // define player's color
         playerColor = PgnUtil.getColorToPlay(startPositionFEN);
@@ -226,7 +232,7 @@ public class OpeningExplorerService {
 	 * and applies various criteria to evaluate moves.
 	 * 
 	 * @param fen               FEN for current position
-	 * @param engineBestMove          Best move in this position according to engine  TODO: not used, review
+	 * @param engineBestMove    Best move in this position according to engine  TODO: not used, review
 	 * @param color             Color to play in this move
 	 * @param remainingDepth    Remaining depth, for example starts with depth 10
 	 *                          and ends with 0 when no further searching can be
@@ -375,7 +381,7 @@ public class OpeningExplorerService {
             	double ratingPercentile = 0.0;
             	double averageRatingOpponents = 0.0;
             	
-                Double localEval = null;
+                Double localEval = 0.0;
                 boolean skipEvalCheck = true;
 
             	
@@ -428,7 +434,11 @@ public class OpeningExplorerService {
                     	// TODO: check if could use ratingPercentile  >= minPercentileForRatingAvg  like we did in the past
                     	
                     	isGoodMove = true;
-                    	localEval = getEval(fen, move);
+                    	
+                    	if (evalDepth > 0) {
+                    		localEval = getEval(fen, move);
+                    	}
+                    	
                     	log.debug("*** GOOD MOVE: move={} eval={}", move, localEval);
                     	log.debug("popularity pctg: " + popularityPctg);                    	
                     	log.debug("avg rating rank: " + averageRatingRanks.get(i));

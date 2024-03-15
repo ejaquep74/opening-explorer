@@ -1,14 +1,25 @@
 package com.ejaque.openingexplorer.util;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.ejaque.openingexplorer.config.Constants;
+import com.github.bhlangonijr.chesslib.Board;
+import com.github.bhlangonijr.chesslib.Piece;
+import com.github.bhlangonijr.chesslib.Square;
+import com.github.bhlangonijr.chesslib.move.Move;
+import com.github.bhlangonijr.chesslib.move.MoveList;
 
 public class UciUtil {
 
-    private static Pattern SCORE_PATTERN = Pattern.compile("score cp (-?\\d+)|score mate (-?\\d+)");
+    private static final Pattern SCORE_PATTERN = Pattern.compile("score cp (-?\\d+)|score mate (-?\\d+)");
 
+    private static final Pattern MOVES_PATTERN = Pattern.compile("pv\\s+(.+)");
+
+    
     /**
      * Gets the color to play from the FEN string.
      * @param fenCode The FEN string of the position.
@@ -67,4 +78,85 @@ public class UciUtil {
 
         throw new IllegalArgumentException("Invalid best move message: No valid move found.");
     }
+    
+    
+
+    public static List<Move> detectSacrifices(String fen, List<String> moves) {
+        Board board = new Board();
+        board.loadFromFen(fen);
+        MoveList moveList = new MoveList(fen);
+        Piece promotionPiece = null;
+
+        List<Move> sacrifices = new ArrayList<>();
+        for (String moveStr : moves) {
+        	String moveStrUcase = moveStr.toUpperCase();
+        	Square square1 = Square.valueOf(moveStrUcase.substring(0, 2));
+        	Square square2 = Square.valueOf(moveStrUcase.substring(2, 4));
+        	
+        	if (moveStr.length() > 4) {
+        		promotionPiece = Piece.valueOf(moveStr.substring(4, 5));
+        	} else {
+        		promotionPiece = Piece.NONE;
+        	}
+            Move move = new Move(
+            		square1, 
+            		square2, 
+            		promotionPiece);
+            moveList.add(move);
+            board.doMove(move);
+
+            if (isSacrifice(move, board)) {
+                sacrifices.add(move);
+            }
+        }
+        return sacrifices;
+    }
+
+    private static boolean isSacrifice(Move move, Board board) {
+        board.undoMove();
+        int valueBefore = pieceValue(board.getPiece(move.getFrom()));
+        int valueAfter = pieceValue(board.getPiece(move.getTo()));
+        board.doMove(move);
+
+        // to be a sacrifice, target square must have a piece and origin square must have a greater piece
+        return valueAfter > 0 && valueBefore - valueAfter > 1;
+    }
+
+    private static int pieceValue(com.github.bhlangonijr.chesslib.Piece piece) {
+        switch (piece) {
+            case WHITE_PAWN:
+            case BLACK_PAWN:
+                return 1;
+            case WHITE_KNIGHT:
+            case BLACK_KNIGHT:
+            case WHITE_BISHOP:
+            case BLACK_BISHOP:
+                return 3;
+            case WHITE_ROOK:
+            case BLACK_ROOK:
+                return 5;
+            case WHITE_QUEEN:
+            case BLACK_QUEEN:
+                return 9;
+            default:
+                return 0;
+        }
+    }
+    
+    
+    /**
+     * Extracts the list of moves from a UCI "info depth..." message.
+     *
+     * @param uciInfoMessage The UCI message containing move information.
+     * @return A list of moves or an empty list if no moves are found.
+     */
+    public static List<String> extractMoves(String uciInfoMessage) {
+        Matcher matcher = MOVES_PATTERN.matcher(uciInfoMessage);
+        if (matcher.find()) {
+            String movesStr = matcher.group(1);
+            return Arrays.asList(movesStr.split("\\s+"));
+        }
+        return Arrays.asList();  // return an empty list if no moves are found
+    }
+
 }

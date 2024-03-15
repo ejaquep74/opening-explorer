@@ -5,9 +5,18 @@ import java.io.BufferedWriter;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.List;
 
 import com.ejaque.openingexplorer.config.Constants;
 import com.github.bhlangonijr.chesslib.Board;
+import com.github.bhlangonijr.chesslib.Piece;
+import com.github.bhlangonijr.chesslib.Square;
+import com.github.bhlangonijr.chesslib.game.Event;
+import com.github.bhlangonijr.chesslib.game.Game;
+import com.github.bhlangonijr.chesslib.game.GameResult;
+import com.github.bhlangonijr.chesslib.game.GenericPlayer;
+import com.github.bhlangonijr.chesslib.game.Player;
+import com.github.bhlangonijr.chesslib.game.Round;
 import com.github.bhlangonijr.chesslib.move.Move;
 import com.github.bhlangonijr.chesslib.move.MoveException;
 
@@ -265,4 +274,86 @@ public class PgnUtil {
                 "C:/Users/eajaquep/Documents/ejp-annotated.pgn", 
         		"C:/Users/eajaquep/Documents/mega-annotated.pgn");        
     }
+
+//    public static String getPgn(String fenCodeCurrEval, List<String> uciMoves) {
+//        Board board = new Board();
+//        board.loadFromFen(fenCodeCurrEval);
+//
+//        for (String uciMove : uciMoves) {
+//            try {
+//                Move move = new Move(Square.valueOf(uciMove.substring(0, 2)), Square.valueOf(uciMove.substring(2, 4)), board.getPiece(Square.valueOf(uciMove.substring(0, 2))));
+//                board.doMove(move);
+//            } catch (MoveException e) {
+//                e.printStackTrace();
+//                return "Invalid move sequence";
+//            }
+//        }
+//        
+//        return board.getFen() + " " + board.get;
+//    }
+    
+    /**
+     * Generates PGN from a given FEN and a list of UCI moves.
+     * 
+     * @param fenCodeCurrEval The FEN code representing the current evaluation state.
+     * @param uciMoves A list of moves in UCI format.
+     * @return A string in PGN format representing the game.
+     */
+    public static String getPgn(String fen, List<String> uciMoves) {
+
+    	Event event = new Event();
+        event.setName("Sample Event"); // Set the event name
+        event.setSite("Sample Location"); // Set the event location
+        event.setStartDate("2024.03.08"); // Set the event start date
+
+        Round round = new Round(event); // Associate the event with the round
+
+        Game game = new Game("gameId", round);
+        
+        Player whitePlayer = new GenericPlayer("id1", "name1"); // Set the name of the white player
+        Player blackPlayer = new GenericPlayer("id2", "name2"); // Set the name of the black player
+
+        game.setWhitePlayer(whitePlayer);
+        game.setBlackPlayer(blackPlayer);
+        game.setResult(GameResult.DRAW);
+
+        Board board = new Board();
+        board.loadFromFen(fen);
+
+        game.setFen(fen);
+        game.setBoard(board);
+        
+        for (String uciMove : uciMoves) {
+        	Piece promotionPiece = null;
+        	String moveStrUcase = uciMove.toUpperCase();
+        	Square square1 = Square.valueOf(moveStrUcase.substring(0, 2));
+        	Square square2 = Square.valueOf(moveStrUcase.substring(2, 4));
+        	
+        	if (uciMove.length() > 4) {
+        		promotionPiece = Piece.valueOf(uciMove.substring(4, 5));
+        	} else {
+        		promotionPiece = Piece.NONE;
+        	}
+            Move move = new Move(
+            		square1, 
+            		square2, 
+            		promotionPiece);
+            try {
+                board.doMove(move);
+                //game.setHalfMoves(null);
+                //FIXME: game.getHalfMoves().add(move);
+            } catch (MoveException e) {
+                e.printStackTrace();
+            }
+        }
+
+        try {
+            // Generate PGN from the Game object
+            return game.toPgn(true, true); // Parameters can be set for including variations and comments
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+   
 }

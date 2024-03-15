@@ -1,8 +1,14 @@
 package com.ejaque.openingexplorer.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.util.Arrays;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import com.github.bhlangonijr.chesslib.move.MoveException;
 
 public class PgnUtilTest {
 
@@ -91,6 +97,21 @@ public class PgnUtilTest {
         String input = "1. e4 z0";
         String expected = "";
         assertEquals(expected, PgnUtil.removeNullMovesFromGame(input));
+    }
+    
+    
+    @Test
+    public void testGetPgn() throws MoveException {
+    	
+    	// from this nice example: https://www.chess.com/article/view/the-positional-queen-sacrifice
+        String fen = "b1r5/2r1kp2/3p1p1p/1pq1pP1N/4PbPP/pPPR1Q2/P1B5/1K1R4 b - - 1 31";
+        List<String> uciMoves = Arrays.asList("c5c3", "d3c3", "c7c3", "f3e2");
+        
+        String pgn = PgnUtil.getPgn(fen, uciMoves);
+        assertNotNull(pgn);
+
+        // You might want to print or further assert something with the PGN to ensure correctness
+        System.out.println(pgn);
     }
 }
 

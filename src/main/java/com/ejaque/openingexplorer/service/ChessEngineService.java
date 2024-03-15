@@ -188,6 +188,11 @@ public class ChessEngineService {
                 
                 if (message.startsWith("info") && message.contains("score cp")) {
                 	currEval = UciUtil.getEval(fenCodeCurrEval, message);
+                	
+                	List<String> uciMoves = UciUtil.extractMoves(message);
+                	if (UciUtil.detectSacrifices(fenCodeCurrEval, UciUtil.extractMoves(message)).size() > 0) {
+                		log.warn("Sacrifices in this PGN:\n" + PgnUtil.getPgn(fenCodeCurrEval, uciMoves));
+                	}
                 }
                 
                 if (message.startsWith("bestmove")) {
